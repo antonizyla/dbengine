@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 public class ScannerTest {
-    
+
     @Test
-    public void testNumberParsing(){
+    public void testNumberParsing() {
         String a = "23";
         String b = "1223";
         String c = "0.0101";
@@ -23,49 +23,49 @@ public class ScannerTest {
     }
 
     @Test
-    public void testNumbersFollowedByTokens(){
+    public void testNumbersFollowedByTokens() {
         String a = "22 >";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().size(), 2);
     }
 
     @Test
-    public void testNumbersPrefixedByTokens(){
+    public void testNumbersPrefixedByTokens() {
         String a = ") 22";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().size(), 2);
     }
 
     @Test
-    public void testBeforeAndAfterTokens(){
+    public void testBeforeAndAfterTokens() {
         String a = ") 22 \"hello\" 4";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().size(), 4);
     }
 
-    @Test 
-    public void testStringScanning(){
+    @Test
+    public void testStringScanning() {
         String a = "\"hello\"";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().get(0).literal, "hello");
     }
 
     @Test
-    public void testIdentifier(){
+    public void testIdentifier() {
         String a = "Hello";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().get(0).type, TokenType.IDENTIFIER);
     }
 
     @Test
-    public void testImproperIdentifiers(){
+    public void testImproperIdentifiers() {
         String a = "He3llo";
         Scanner A = new Scanner(a);
         assertEquals(A.scanTokens().size(), 3);
     }
 
     @Test
-    public void testReserved(){
+    public void testReserved() {
         String a = "Select from";
         Scanner A = new Scanner(a);
         var tokens = A.scanTokens();

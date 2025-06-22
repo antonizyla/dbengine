@@ -164,10 +164,10 @@ public class Scanner {
 
         // determine token type ID vs Reserved Word
         TokenType t = keywords.get(value.toLowerCase());
-        if (t == null){
+        if (t == null) {
             t = TokenType.IDENTIFIER;
         }
-        
+
         addToken(t, value);
     }
 
