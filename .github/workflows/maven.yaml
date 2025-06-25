@@ -16,6 +16,11 @@ jobs:
       - name: Format Code
         run: |
           mvn formatter:format
+          git config user.name github-actions
+          git config user.email github-actions@github.com 
+          git add .
+          git commit -m "Formatted Project" || echo "No commit required"
+          git push
       - name: Compile and Test with Maven 
         run: | 
           mvn --batch-mode --update-snapshots verify
