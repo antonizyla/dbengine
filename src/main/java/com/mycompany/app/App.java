@@ -18,7 +18,7 @@ public class App {
         print_table(t2);
 
         System.out.println(t2.select(List.of("username"), 2).get(0));
-    
+
     }
 
     public static void print_table(Table t) {

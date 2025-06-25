@@ -64,14 +64,14 @@ public class Table {
         }
 
         ArrayList<Integer> indexes = new ArrayList<>();
-        for (var col : cols){
+        for (var col : cols) {
             indexes.add(columnLocationMap.get(col));
         }
 
         List<List<String>> res = new ArrayList<>();
         for (var r : data.values()) {
             ArrayList<String> row = new ArrayList<>();
-            for (var index : indexes){
+            for (var index : indexes) {
                 row.add(r.get(index));
             }
             res.add(row);
