@@ -47,7 +47,6 @@
     <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to
       parent pom) -->
       <plugins>
-
         <plugin>
           <!-- Build an executable JAR -->
           <groupId>org.apache.maven.plugins</groupId>
@@ -63,7 +62,6 @@
             </archive>
           </configuration>
         </plugin>
-
         <!-- clean lifecycle, see
         https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
         <plugin>
