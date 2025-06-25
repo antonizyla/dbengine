@@ -18,11 +18,11 @@ public class Database implements Serializable {
         this.tables = new HashMap<>();
     }
 
-    public Table getTable(String name){
+    public Table getTable(String name) {
         return tables.get(name);
     }
 
-    public String getFilePath(){
+    public String getFilePath() {
         return filepath;
     }
 

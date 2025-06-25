@@ -9,7 +9,7 @@ import java.util.List;
  * A representation of a Database table to interact with it using java.
  */
 
-public class Table implements Serializable{
+public class Table implements Serializable {
 
     private final ArrayList<Column> columns; // the 'schema' of the table
     private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
@@ -174,7 +174,7 @@ public class Table implements Serializable{
         List<String> row = new ArrayList<>(r.size() + 1);
         row.add(getPK(r));
         row.addAll(r);
-        data.put(row.get(0), row); //this cannot be row.getfirst()
+        data.put(row.get(0), row); // this cannot be row.getfirst()
     }
 
 }

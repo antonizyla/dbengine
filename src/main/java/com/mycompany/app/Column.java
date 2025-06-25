@@ -5,7 +5,8 @@ import java.io.Serializable;
 /**
  * Column of database definition
  */
-public record Column(String name, String data, boolean nullable, boolean primary, String dependsOn) implements Serializable{
+public record Column(String name, String data, boolean nullable, boolean primary, String dependsOn)
+        implements Serializable {
     /**
      * Constructor for a column
      *
