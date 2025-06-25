@@ -4,13 +4,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.lang.System;
 
 // takes in a raw string and returns a list of tokens
 public class Scanner {
 
     // for checking if an identifier is a reserved word
     private static final Map<String, TokenType> keywords;
+
     static {
         keywords = new HashMap<String, TokenType>();
         keywords.put("select", TokenType.SELECT);
@@ -42,6 +42,11 @@ public class Scanner {
         return current >= input.length();
     }
 
+    /**
+     * Initiate the scan of tokens
+     *
+     * @return List of the tokens gathered
+     */
     public List<Token> scanTokens() {
         while (!atEnd()) {
             start = current;
@@ -98,7 +103,7 @@ public class Scanner {
                     scanIdentifier();
                     break;
                 }
-                System.err.println(String.format("[Scanner] Unexpected Character, %s", c));
+                System.err.printf("[Scanner] Unexpected Character, %s%n", c);
                 break;
         }
     }
@@ -146,7 +151,7 @@ public class Scanner {
             advance();
         }
         if (atEnd()) {
-            System.err.println(String.format("[Scanner] Unterminated String, Line:%s", line));
+            System.err.printf("[Scanner] Unterminated String, Line:%s%n", line);
             return;
         }
 

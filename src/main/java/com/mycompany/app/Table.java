@@ -1,18 +1,32 @@
 package com.mycompany.app;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-public class Table {
+/**
+ * A representation of a Database table to interact with it using java.
+ */
 
-    private ArrayList<Column> columns;
-    private HashMap<String, Integer> columnLocationMap;
-    private String name;
+public class Table implements Serializable{
 
-    private ArrayList<Integer> pk_indexes;
+    private final ArrayList<Column> columns; // the 'schema' of the table
+    private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
+    private final String name; // table name
 
-    private HashMap<String, List<String>> data; // hold the primary key and the row
+    private final ArrayList<Integer> pk_indexes;
+
+    private final HashMap<String, List<String>> data; // hold the primary key and the row
+
+    /**
+     * Creation of a Database Table
+     *
+     * @param name
+     *            - Name of the table
+     * @param columns
+     *            - List of Columns to defin the schema
+     */
 
     public Table(String name, List<Column> columns) {
         this.columns = new ArrayList<>(columns.size());
@@ -27,8 +41,8 @@ public class Table {
         this.pk_indexes = new ArrayList<>();
 
         for (int i = 0; i < columns.size(); i++) {
-            columnLocationMap.put(columns.get(i).getName(), i + 1);
-            if (columns.get(i).isPrimary()) {
+            columnLocationMap.put(columns.get(i).name(), i + 1);
+            if (columns.get(i).primary()) {
                 pk_indexes.add(i);
             }
         }
@@ -40,6 +54,11 @@ public class Table {
         data = new HashMap<>();
     }
 
+    /**
+     * Name of table
+     *
+     * @return Table name
+     */
     public String getName() {
         return name;
     }
@@ -47,20 +66,26 @@ public class Table {
     private List<String> getColumnNames() {
         List<String> columnNames = new ArrayList<>(this.columns.size());
         for (int i = 0; i < this.columns.size(); i++) {
-            columnNames.add(this.columns.get(i).getName());
+            columnNames.add(this.columns.get(i).name());
         }
         return columnNames;
     }
 
+    /**
+     * Select Data from table
+     *
+     * @param columns
+     *            which columns you want to get
+     * @param limit
+     *            maximum number of rows
+     *
+     * @return the data as list of list of strings
+     */
     public List<List<String>> select(List<String> columns, Integer limit) {
         ArrayList<String> cols = new ArrayList<>(columns.size());
-        for (var col : columns) {
-            cols.add(col);
-        }
+        cols.addAll(columns);
         if (cols.contains("*")) {
-            for (var col : getColumnNames()) {
-                cols.add(col);
-            }
+            cols.addAll(getColumnNames());
         }
 
         ArrayList<Integer> indexes = new ArrayList<>();
@@ -79,34 +104,56 @@ public class Table {
         return res;
     }
 
+    /**
+     * Get the value of a column in a specific row
+     *
+     * @param rowPkey
+     *            the primary key of the row
+     * @param columnName
+     *            the column name as a string
+     *
+     * @return the value of the attribute
+     */
     public String getRowCol(String rowPkey, String columnName) {
         int index = columnLocationMap.get(columnName);
         return data.get(rowPkey).get(index);
     }
 
+    /**
+     * Print the entire table's data
+     */
     public void printData() {
         for (var key : data.keySet()) {
             printRow(key);
         }
     }
 
+    /**
+     * Print the values in a row based on primary key
+     *
+     * @param p_key
+     *            the primary key of the row
+     */
     public void printRow(String p_key) {
         for (var attr : data.get(p_key)) {
             System.out.printf("%s, ", attr);
         }
-        System.out.println("");
+        System.out.println();
     }
 
+    /**
+     * Print the column names and if they are the primary keys of the tables
+     */
     public void printHeader() {
         for (var col : columns) {
-            if (col.isPrimary()) {
-                System.out.printf("*");
-                System.out.printf("%s, ", col.getName());
+            if (col.primary()) {
+                System.out.print("*");
+                System.out.printf("%s, ", col.name());
             } else {
-                System.out.printf("%s, ", col.getName());
+                System.out.printf("%s, ", col.name());
             }
         }
-        System.out.println("");
+        System.out.println();
     }
 
     private String getPK(List<String> row) {
@@ -117,13 +164,17 @@ public class Table {
         return pk;
     }
 
+    /**
+     * Insert a row into the table
+     *
+     * @param r
+     *            the row to insert as list of string
+     */
     public void insert(List<String> r) {
         List<String> row = new ArrayList<>(r.size() + 1);
         row.add(getPK(r));
-        for (String elem : r) {
-            row.add(elem);
-        }
-        data.put(row.get(0), row);
+        row.addAll(r);
+        data.put(row.get(0), row); //this cannot be row.getfirst()
     }
 
 }
