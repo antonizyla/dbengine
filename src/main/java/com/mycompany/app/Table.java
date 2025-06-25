@@ -52,7 +52,7 @@ public class Table {
         return columnNames;
     }
 
-    public void select(List<String> columns, Integer limit) {
+    public List<List<String>> select(List<String> columns, Integer limit) {
         ArrayList<String> cols = new ArrayList<>(columns.size());
         for (var col : columns) {
             cols.add(col);
@@ -62,10 +62,26 @@ public class Table {
                 cols.add(col);
             }
         }
+
+        ArrayList<Integer> indexes = new ArrayList<>();
+        for (var col : cols){
+            indexes.add(columnLocationMap.get(col));
+        }
+
         List<List<String>> res = new ArrayList<>();
         for (var r : data.values()) {
-            res.add(r);
+            ArrayList<String> row = new ArrayList<>();
+            for (var index : indexes){
+                row.add(r.get(index));
+            }
+            res.add(row);
         }
+        return res;
+    }
+
+    public String getRowCol(String rowPkey, String columnName) {
+        int index = columnLocationMap.get(columnName);
+        return data.get(rowPkey).get(index);
     }
 
     public void printData() {
@@ -102,7 +118,12 @@ public class Table {
     }
 
     public void insert(List<String> r) {
-        data.put(getPK(r), r);
+        List<String> row = new ArrayList<>(r.size() + 1);
+        row.add(getPK(r));
+        for (String elem : r) {
+            row.add(elem);
+        }
+        data.put(row.get(0), row);
     }
 
 }
