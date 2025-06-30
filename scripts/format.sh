@@ -1,6 +1,6 @@
 #!/bin/sh
 
-java -jar google-java-format.jar --replace src/main/java/com/mycompany/app/*.java
+find . -type f -name "*.java" | xargs java -jar google-java-format.jar --replace
 git config user.name github-actions
 git config user.email github-actions@github.com
 git add .
