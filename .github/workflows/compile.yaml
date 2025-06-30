@@ -1,4 +1,4 @@
-name: Maven Compile and Test 
+name: Generate Javadocs, Compile and Test 
 on: [push]
 permissions: 
   contents: write
