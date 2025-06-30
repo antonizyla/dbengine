@@ -1,4 +1,2 @@
-/**
- * Database engine package
- */
+/** Database engine package. */
 package com.mycompany.app;
