@@ -2,29 +2,44 @@ package com.mycompany.app;
 
 import java.util.List;
 
+/** Entry of the CLI Application. */
 public class App {
-    public static void main(String[] args) {
-        Table t = new Table("table1", List.of(new Column[] { new Column("username", "", false, true, ""),
-                new Column("password", "", false, false, "") }));
-        t.insert(List.of("col1", "col2"));
-        print_table(t);
+  /**
+   * Entry point of the Program when ran as a CLI application.
+   *
+   * @param args command line arguments
+   */
+  public static void main(String[] args) {
 
-        System.out.println("");
+    Database d = new Database("testing", "./testingdbfile");
 
-        Table t2 = new Table("table1", List.of(new Column[] { new Column("username", "", false, true, ""),
-                new Column("password", "", false, false, "") }));
-        t2.insert(List.of("John smith", "Password1"));
-        t2.insert(List.of("Liam", "NotPassword12"));
-        print_table(t2);
+    d.createTable(
+        List.of(
+            new Column[] {
+              new Column("username", "", false, true, ""),
+              new Column("password", "", false, false, "")
+            }),
+        "Users");
 
-        System.out.println(t2.select(List.of("username"), 2).get(0));
+    d.getTable("Users").insert(List.of("Liam Crossley", "passowrd"));
+    d.getTable("Users").printData();
 
-    }
+    Disk.writeDatabase(d);
 
-    public static void print_table(Table t) {
-        System.out.printf("Printing Table: %s%n", t.getName());
-        t.printHeader();
-        // t.select(List.of(new String[]{"*"}), 0);
-        t.printData();
-    }
+    var e = Disk.readDatabase("testingdbfile");
+
+    e.getTable("Users").printData();
+  }
+
+  /**
+   * Prints a primitive String Represnetation of a table.
+   *
+   * @param t table object to to be printed
+   */
+  public static void print_table(Table t) {
+    System.out.printf("Printing Table: %s%n", t.getName());
+    t.printHeader();
+    // t.select(List.of(new String[]{"*"}), 0);
+    t.printData();
+  }
 }

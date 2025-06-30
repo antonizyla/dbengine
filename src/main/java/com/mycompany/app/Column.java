@@ -1,37 +1,66 @@
 package com.mycompany.app;
 
-public class Column {
-    private final String name;
-    private final String data;
-    private final boolean nullable;
-    private final boolean primary;
-    private final String dependsOn;
+import java.io.Serializable;
 
-    public Column(String name, String data, boolean nullable, boolean primary, String dependsOn) {
-        this.name = name;
-        this.data = data;
-        this.nullable = nullable;
-        this.primary = primary;
-        this.dependsOn = dependsOn;
-    }
+/**
+ * Column of database definition.
+ *
+ * @param name Name of the attribute
+ * @param data Data for particular isntance
+ * @param nullable is Not Null
+ * @param primary is part of priamry key
+ * @param dependsOn is it a foreign key
+ */
+public record Column(String name, String data, boolean nullable, boolean primary, String dependsOn)
+    implements Serializable {
 
-    public String getDependsOn() {
-        return dependsOn;
-    }
+  /**
+   * Get if a column is foreign key.
+   *
+   * @return Boolean result of this
+   */
+  @Override
+  public String dependsOn() {
+    return dependsOn;
+  }
 
-    public boolean isPrimary() {
-        return primary;
-    }
+  /**
+   * Is the column a primary key component.
+   *
+   * @return Boolean result
+   */
+  @Override
+  public boolean primary() {
+    return primary;
+  }
 
-    public boolean isNullable() {
-        return nullable;
-    }
+  /**
+   * Is the attribute able to be null.
+   *
+   * @return Boolean of this
+   */
+  @Override
+  public boolean nullable() {
+    return nullable;
+  }
 
-    public String getData() {
-        return data;
-    }
+  /**
+   * Return the internal data of this attribute.
+   *
+   * @return Data
+   */
+  @Override
+  public String data() {
+    return data;
+  }
 
-    public String getName() {
-        return name;
-    }
+  /**
+   * The name of the attribute.
+   *
+   * @return String of name of attributes
+   */
+  @Override
+  public String name() {
+    return name;
+  }
 }
