@@ -1,4 +1,4 @@
-name: Generate Java Docs 
+name: Format Code and CheckStyle 
 on: [push]
 permissions: 
   contents: write

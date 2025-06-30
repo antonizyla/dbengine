@@ -1,5 +1,6 @@
 package com.mycompany.app;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
@@ -18,13 +19,14 @@ public class Disk {
     try {
       ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream(filepath));
       Database retrieved = (Database) objectInputStream.readObject();
-
-      System.out.println("[DISK OPERATION] Read Database ");
       objectInputStream.close();
+      if (retrieved.getFilePath() == null || retrieved.getFilePath().isEmpty()) {
+        throw new RuntimeException("[DISK OPERATION] No database found at " + filepath);
+      }
+      System.out.println("[DISK OPERATION] Read Database ");
       return retrieved;
     } catch (Exception e) {
-      e.printStackTrace();
-      return null;
+      throw new RuntimeException("[DISK OPERATION] Failed to read database", e);
     }
   }
 
@@ -35,13 +37,21 @@ public class Disk {
    */
   public static void writeDatabase(Database db) {
     try {
+      // check to make sure that the if the file exists then it is a database file
+      File f = new File(db.getFilePath());
+      if (f.exists() && f.isFile()) {
+        var fileRead = readDatabase(db.getFilePath());
+        if (!fileRead.getName().equals(db.getName())) {
+          throw new RuntimeException("The file already exists and is not a database file");
+        }
+      }
       FileOutputStream fileOutputStream = new FileOutputStream(db.getFilePath());
       ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);
       objectOutputStream.writeObject(db);
       objectOutputStream.close();
       System.out.println("[DISK OPERATION] Saved Database");
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new RuntimeException("[DISK OPERATION] Failed to save database", e);
     }
   }
 }
