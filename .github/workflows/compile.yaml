@@ -1,4 +1,4 @@
-name: Generate Java Docs 
+name: Maven Compile and Test 
 on: [push]
 permissions: 
   contents: write
@@ -13,7 +13,9 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
-      - name: Format Code
-        run: ./scripts/format.sh 
+      - name: Javadocs Generate
+        run: | 
+          ./scripts/javadocs.sh
       - name: Compile and Test with Maven 
-        run: ./scripts/package_verify.sh 
+        run: | 
+          ./scripts/package_verify.sh 
