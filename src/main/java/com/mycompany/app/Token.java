@@ -15,7 +15,7 @@ public class Token {
    * @param literal the literal that is represented e.g. "7" -> Int 7
    * @param line Line number of the token
    */
-  public Token(TokenType type, String lexeme, Object literal, int line) {
+  public Token(TokenType type, String lexeme, Object literal, Integer line) {
     this.type = type;
     this.lexeme = lexeme;
     this.literal = literal;

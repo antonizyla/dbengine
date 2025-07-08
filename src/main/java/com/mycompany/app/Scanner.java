@@ -1,5 +1,6 @@
 package com.mycompany.app;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +23,34 @@ public class Scanner {
     keywords.put("or", TokenType.OR);
     keywords.put("not", TokenType.NOT);
     keywords.put("in", TokenType.IN);
+    keywords.put("create", TokenType.CREATE);
+    keywords.put("table", TokenType.TABLE);
+    keywords.put("primary", TokenType.PRIMARY);
+    keywords.put("foreign", TokenType.FOREIGN);
+    keywords.put("references", TokenType.REFERENCES);
+    keywords.put("unique", TokenType.UNIQUE);
+    keywords.put("join", TokenType.JOIN);
+    keywords.put("on", TokenType.ON);
+    keywords.put("as", TokenType.AS);
+    keywords.put("order", TokenType.ORDER_BY);
+    keywords.put("group", TokenType.GROUP_BY);
+    keywords.put("having", TokenType.HAVING);
+    keywords.put("limit", TokenType.LIMIT);
+    keywords.put("update", TokenType.UPDATE);
+    keywords.put("set", TokenType.SET);
+    keywords.put("values", TokenType.VALUES);
+    keywords.put("alter", TokenType.ALTER);
+    keywords.put("add", TokenType.ADD);
+    keywords.put("drop", TokenType.DROP);
+    keywords.put("rename", TokenType.RENAME);
+    keywords.put("column", TokenType.COLUMN);
+    keywords.put("database", TokenType.DATABASE);
+    keywords.put("if", TokenType.IF);
+    keywords.put("exists", TokenType.EXISTS);
+    keywords.put("string", TokenType.STRING_TYPE);
+    keywords.put("number", TokenType.NUMBER);
+    keywords.put("key", TokenType.KEY);
+    keywords.put("null", TokenType.NULL);
   }
 
   private final String input;
@@ -32,8 +61,8 @@ public class Scanner {
   private int current = 0;
   private int start = 0;
 
-  Scanner(String input) {
-    this.input = input;
+  public Scanner(String in) {
+    this.input = in;
   }
 
   // determine if finished going through entire input string.
@@ -91,6 +120,9 @@ public class Scanner {
         scanString();
         break;
       case ' ':
+        break;
+      case ',':
+        addToken(TokenType.COMMA);
         break;
       case '\t':
         break;
@@ -159,11 +191,11 @@ public class Scanner {
     advance(); // advance to the closing quote mark
 
     String value = input.substring(start + 1, current - 1);
-    addToken(TokenType.STRING, value);
+    addToken(TokenType.STRING_LITERAL, value);
   }
 
   private void scanIdentifier() {
-    while (isLetter(lookahead()) && !atEnd()) {
+    while ((isDigit(lookahead()) || isLetter(lookahead())) && !atEnd()) {
       advance();
     }
     String value = input.substring(start, current);
