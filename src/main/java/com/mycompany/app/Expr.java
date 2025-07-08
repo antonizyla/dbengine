@@ -24,17 +24,14 @@ abstract class Expr {
     final String tableName;
     final List<Column> columns;
 
-    Create(String tableName, List<Column> columns) {
+    Create(String tableName, List<Column> cols) {
       this.tableName = tableName;
-      this.columns = columns;
+      this.columns = cols;
     }
 
     @Override
     public String toString() {
-      return "Create{" +
-          "tableName='" + tableName + '\'' +
-          ", columns=" + columns +
-          '}';
+      return "Create{" + "tableName='" + tableName + '\'' + ", columns=" + columns + '}';
     }
   }
 
@@ -119,11 +116,7 @@ abstract class Expr {
 
     @Override
     public String toString() {
-      return "Alias{" +
-          "columnName=" + colExpr +
-          ", alias=" + alias +
-          '}';
-
+      return "Alias{" + "columnName=" + colExpr + ", alias=" + alias + '}';
     }
   }
 }

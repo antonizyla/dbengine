@@ -14,7 +14,7 @@ public final class Database implements Serializable {
   /**
    * Create a database based on name and filepath to store it.
    *
-   * @param name     Name of database to create
+   * @param name Name of database to create
    * @param filepath Filepath to store the database
    */
   public Database(String name, String filepath) {
@@ -26,7 +26,7 @@ public final class Database implements Serializable {
 
   /**
    * Public Interface to run a query on the database.
-   * 
+   *
    * @param query SQL query to run on the database
    * @param debug If true, print debug information along the way
    * @return true if the query was successful, false otherwise
@@ -76,12 +76,13 @@ public final class Database implements Serializable {
       System.err.println("Table " + select.table.lexeme + " does not exist.");
       return;
     }
-    // check that each of the columns exists 
+    // check that each of the columns exists
     for (Expr variable : select.variables) {
       if (variable instanceof Expr.Literal) { // to allow for having expresions like `col + 1`
         String columnName = ((Expr.Literal) variable).value.toString();
         if (!table.hasColumn(columnName)) {
-          System.err.println("Column " + columnName + " does not exist in table " + table.getName());
+          System.err.println(
+              "Column " + columnName + " does not exist in table " + table.getName());
           return;
         }
       } else {
@@ -89,7 +90,6 @@ public final class Database implements Serializable {
         return;
       }
     }
-
   }
 
   /**
@@ -124,7 +124,7 @@ public final class Database implements Serializable {
    * Create table from definitions of columns and name.
    *
    * @param definitions Definition of each columns
-   * @param name        Name of the table
+   * @param name Name of the table
    */
   public void createTable(List<Column> definitions, String name) {
     tables.put(name, new Table(name, definitions));
@@ -133,23 +133,19 @@ public final class Database implements Serializable {
   /**
    * Change the schema of a table by providing a new schema.
    *
-   * @param tableName   The table in the database to be changed
+   * @param tableName The table in the database to be changed
    * @param definitions The new schema as a set of column definitions
    */
-  public void alterTable(String tableName, List<Column> definitions) {
-  }
+  public void alterTable(String tableName, List<Column> definitions) {}
 
   /** Commit the changes as a transaction and write to the filesystem. */
-  public void commit() {
-  }
+  public void commit() {}
 
   /** Rollback the database to the first transaction. */
-  public void rollback() {
-  }
+  public void rollback() {}
 
   /** Begin a database Transaction. */
-  public void startTransaction() {
-  }
+  public void startTransaction() {}
 
   /** Print the name of the database. */
   public void printAbout() {

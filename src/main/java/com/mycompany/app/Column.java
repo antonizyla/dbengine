@@ -6,12 +6,13 @@ import java.io.Serializable;
  * Column of database definition.
  *
  * @param name Name of the attribute
- * @param dataType Data for particular isntance
+ * @param type Data for particular isntance
  * @param nullable is Not Null
  * @param primary is part of priamry key
  * @param dependsOn is it a foreign key
  */
-public record Column(String name, String dataType, boolean nullable, boolean primary, String dependsOn)
+public record Column(
+    String name, TokenType type, boolean nullable, boolean primary, String dependsOn)
     implements Serializable {
 
   /**
@@ -50,8 +51,8 @@ public record Column(String name, String dataType, boolean nullable, boolean pri
    * @return Data
    */
   @Override
-  public String getDataType() {
-    return dataType;
+  public TokenType type() {
+    return type;
   }
 
   /**

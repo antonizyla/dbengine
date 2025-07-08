@@ -3,8 +3,6 @@ package com.mycompany.app;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.mycompany.app.Expr.Create;
-
 /** Allow for reading in sql and converting to an AST. */
 public class Parser {
   private final List<Token> tokens;
@@ -67,7 +65,8 @@ public class Parser {
       if (!isAtEnd() && match(TokenType.AS)) {
         if (match(TokenType.IDENTIFIER)) {
           // got an alias
-          return new Expr.Alias(new Expr.Literal(identifier.lexeme), new Expr.Literal(previous().lexeme));
+          return new Expr.Alias(
+              new Expr.Literal(identifier.lexeme), new Expr.Literal(previous().lexeme));
         }
       }
     } else {
@@ -83,15 +82,15 @@ public class Parser {
 
   protected Expr createTable() {
     // to handle the create table statement
-    String tablename = null;
-    List<Column> columns = new ArrayList<>();
 
     match(TokenType.CREATE);
     if (!match(TokenType.TABLE)) {
-      throw new RuntimeException("Expected TABLE keyword after CREATE"); // will be changed when can do index etc...
+      throw new RuntimeException(
+          "Expected TABLE keyword after CREATE"); // will be changed when can do index etc...
     }
 
     // parse the table name
+    String tablename = "";
     if (!match(TokenType.IDENTIFIER)) {
       throw new RuntimeException("Expected table name after CREATE");
     }
@@ -102,15 +101,20 @@ public class Parser {
     }
 
     // parse the columns
+    List<Column> columns = new ArrayList<>();
+    while (!match(TokenType.SEMICOLON)) {
+      columns.add(column());
+    }
 
+    return new Expr.Create(tablename, columns);
   }
 
   protected Column column() {
     String name = "";
-    String type = "";
+    TokenType type = null;
+    ;
     boolean isPrimaryKey = false;
-    boolean nullable = true; 
-    boolean isForeignKey = false;
+    boolean nullable = true;
     String foreignTable = "";
     String foreignColumn = "";
 
@@ -137,35 +141,42 @@ public class Parser {
         if (!match(TokenType.RIGHT_PAR)) {
           throw new RuntimeException("Expected ')' after foreign column name e.g. table(column)");
         }
+
+        nullable = false; // foreign keys cannot be null
       }
 
       // primary keys
       if (match(TokenType.PRIMARY)) {
         if (!match(TokenType.KEY)) {
           throw new RuntimeException("Expected KEY after PRIMARY");
+        } else {
+          isPrimaryKey = true;
         }
       }
 
-      // data type 
+      // data type
       if (match(TokenType.STRING_TYPE, TokenType.NUMBER)) {
-        type = previous().lexeme;
-      } else {
-        throw new RuntimeException("Expected data type declaration");
+        type = previous().type;
       }
 
       // check if nullable
-      if (match(TokenType.NOT)){
-        if (!match(TokenType.NULL)){
+      if (match(TokenType.NOT)) {
+        if (!match(TokenType.NULL)) {
           throw new RuntimeException("Unexpected token after NOT, expected NULL");
         }
         nullable = false;
       }
+    }
 
+    if (type == null) {
+      throw new RuntimeException("Expected column type after column name");
     }
 
     if (String.format("%s.%s", foreignTable, foreignColumn).equals(".")) {
       return new Column(name, type, false, isPrimaryKey, null);
     }
+    return new Column(
+        name, type, nullable, isPrimaryKey, String.format("%s.%s", foreignTable, foreignColumn));
   }
 
   protected Expr selectStatement() {
@@ -220,8 +231,9 @@ public class Parser {
   }
 
   private boolean check(TokenType type) {
-    if (isAtEnd())
+    if (isAtEnd()) {
       return false;
+    }
     return peek().type == type;
   }
 }

@@ -18,7 +18,7 @@ public class Table implements Serializable {
 
   /**
    * Check if the table has a column with the given name.
-   * 
+   *
    * @param columnName The column to check for
    * @return if the column exists in the table
    */
@@ -30,7 +30,7 @@ public class Table implements Serializable {
    * Creation of a Database Table.
    *
    * @param tableName - Name of the table
-   * @param cols      - List of Columns to defin the schema
+   * @param cols - List of Columns to defin the schema
    */
   public Table(final String tableName, final List<Column> cols) {
     this.columns = new ArrayList<>(cols.size());
@@ -81,7 +81,7 @@ public class Table implements Serializable {
    * Select Data from table.
    *
    * @param colmns which columns you want to get
-   * @param limit  maximum number of rows
+   * @param limit maximum number of rows
    * @return the data as list of list of strings
    */
   public List<List<String>> select(final List<String> colmns, final Integer limit) {
@@ -111,7 +111,7 @@ public class Table implements Serializable {
   /**
    * Get the value of a column in a specific row.
    *
-   * @param rowPkey    the primary key of the row
+   * @param rowPkey the primary key of the row
    * @param columnName the column name as a string
    * @return the value of the attribute
    */
