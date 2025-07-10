@@ -71,6 +71,19 @@ abstract class Expr {
     }
   }
 
+  static class EngineExpr extends Expr {
+    final String database;
+    final boolean drop;
+    final boolean create;
+
+    // if not drop, then it is create
+    EngineExpr(String database, boolean drop, boolean create) {
+      this.drop = drop;
+      this.create = create;
+      this.database = database;
+    }
+  }
+
   // represents logical expression
   // e.g exp1 and exp2, exp1 is exp2 etc..
   static class Logical extends Expr {

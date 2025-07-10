@@ -54,6 +54,7 @@ public class CreationTest {
     Parser p = new Parser(tokens);
 
     try {
+      @SuppressWarnings("unused")
       Column column = p.column();
     } catch (RuntimeException e) {
       assert true; // assert true because there is no `key` after `Primary`

@@ -54,4 +54,21 @@ public class Disk {
       throw new RuntimeException("[DISK OPERATION] Failed to save database", e);
     }
   }
+
+  public static void deleteDatabase(String filepath) {
+    try {
+      File f = new File(filepath);
+      if (!f.exists() || !f.isFile()) {
+        throw new RuntimeException("[DISK OPERATION] No database found at " + filepath);
+      }
+      if (!f.delete()) {
+        throw new RuntimeException(
+            "[DISK OPERATION] Failed to delete database at "
+                + filepath
+                + ". Please check if the file is in use or if you have the necessary permissions.");
+      }
+    } catch (Exception e) {
+      throw new RuntimeException("[DISK OPERATION] Failed to delete database", e);
+    }
+  }
 }

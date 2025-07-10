@@ -49,6 +49,55 @@ public class Parser {
     return statements;
   }
 
+  public Expr.EngineExpr parseEngineExpr() {
+    if (peek().type == TokenType.CREATE) {
+      return createDatabase();
+    } else if (peek().type == TokenType.DROP) {
+      return dropDatabase();
+    } else if (peek().type == TokenType.IDENTIFIER) {
+      // enter database
+      match(TokenType.IDENTIFIER);
+      String dbName = previous().lexeme;
+      return new Expr.EngineExpr(dbName, false, false);
+    } else {
+      throw new RuntimeException("Expected CREATE or DROP keyword for engine expression");
+    }
+  }
+
+  private Expr.EngineExpr createDatabase() {
+    if (!match(TokenType.CREATE)) {
+      throw new RuntimeException("Expected CREATE keyword");
+    }
+    if (!match(TokenType.DATABASE)) {
+      throw new RuntimeException("Expected DATABASE keyword after CREATE");
+    }
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Expected database name after CREATE DATABASE");
+    }
+    String dbName = previous().lexeme;
+    if (!match(TokenType.SEMICOLON)) {
+      throw new RuntimeException("Expected ';' after database name");
+    }
+    return new Expr.EngineExpr(dbName, false, true);
+  }
+
+  private Expr.EngineExpr dropDatabase() {
+    if (!match(TokenType.DROP)) {
+      throw new RuntimeException("Expected DROP keyword");
+    }
+    if (!match(TokenType.DATABASE)) {
+      throw new RuntimeException("Expected DATABASE keyword after DROP");
+    }
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Expected database name after DROP DATABASE");
+    }
+    String dbName = previous().lexeme;
+    if (!match(TokenType.SEMICOLON)) {
+      throw new RuntimeException("Expected ';' after database name");
+    }
+    return new Expr.EngineExpr(dbName, true, false);
+  }
+
   private Expr statement() {
     if (match(TokenType.SELECT)) {
       return selectStatement();
