@@ -43,13 +43,12 @@ public class Parser {
 
   List<Expr> parse() {
     List<Expr> statements = new ArrayList<>();
-    while (!isAtEnd()) {
-      statements.add(statement());
-    }
+    // TODO FOR NOW JUST PARSING FIRST STATEMENT
+    statements.add(statement(true));
     return statements;
   }
 
-  public Expr.EngineExpr parseEngineExpr() {
+  protected Expr.EngineExpr parseEngineExpr() {
     if (peek().type == TokenType.CREATE) {
       return createDatabase();
     } else if (peek().type == TokenType.DROP) {
@@ -98,10 +97,21 @@ public class Parser {
     return new Expr.EngineExpr(dbName, true, false);
   }
 
-  private Expr statement() {
-    if (match(TokenType.SELECT)) {
+  private Expr statement(boolean verbose) {
+    if (check(TokenType.CREATE)) {
+      if (verbose) {
+        System.out.println("Parsing CREATE statement");
+      }
+      return createTable();
+    } else if (check(TokenType.SELECT)) {
+      if (verbose) {
+        System.out.println("Parsing SELECT statement");
+      }
       return selectStatement();
-    } else if (match(TokenType.INSERT)) {
+    } else if (check(TokenType.INSERT)) {
+      if (verbose) {
+        System.out.println("Parsing INSERT statement");
+      }
       return insertStatement();
     }
     return null; // Unimplemented everything else
@@ -125,14 +135,81 @@ public class Parser {
   }
 
   protected Expr standardExpr() {
-    // to handle any standard expression
-    return null;
+    return expression();
+  }
+
+  protected Expr expression() {
+    return addition();
+  }
+
+  private Expr addition() {
+    Expr expr = multiplication();
+
+    while (match(TokenType.PLUS, TokenType.MINUS)) {
+      Token operator = previous();
+      Expr right = multiplication();
+      expr = new Expr.Binary(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private Expr multiplication() {
+    Expr expr = unary();
+
+    while (match(TokenType.STAR, TokenType.SLASH)) {
+      Token operator = previous();
+      Expr right = unary();
+      expr = new Expr.Binary(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private Expr unary() {
+    if (match(TokenType.MINUS)) {
+      Token operator = previous();
+      Expr right = unary();
+      return new Expr.Unary(operator, right);
+    }
+
+    return primary();
+  }
+
+  private Expr primary() {
+    if (match(TokenType.NUMBER)) {
+      return new Expr.Literal(previous().literal);
+    }
+
+    if (match(TokenType.IDENTIFIER)) {
+      return new Expr.Literal(previous().lexeme);
+    }
+
+    if (match(TokenType.LEFT_PAR)) {
+      Expr expr = expression();
+      if (!match(TokenType.RIGHT_PAR)) {
+        throw new RuntimeException("Expected ')' after expression");
+      }
+      return new Expr.Grouping(expr);
+    }
+
+    throw new RuntimeException("Expected expression");
+  }
+
+  protected List<Column> columnList() {
+    // parse the columns
+    List<Column> columns = new ArrayList<>();
+    // a column is based on an identifier... to a comma
+    while (!isAtEnd() && (match(TokenType.COMMA) || peek().type == TokenType.IDENTIFIER)) {
+      columns.add(column());
+    }
+    return columns;
   }
 
   protected Expr createTable() {
     // to handle the create table statement
-
     match(TokenType.CREATE);
+
     if (!match(TokenType.TABLE)) {
       throw new RuntimeException(
           "Expected TABLE keyword after CREATE"); // will be changed when can do index etc...
@@ -150,9 +227,14 @@ public class Parser {
     }
 
     // parse the columns
-    List<Column> columns = new ArrayList<>();
-    while (!match(TokenType.SEMICOLON)) {
-      columns.add(column());
+    var columns = columnList();
+
+    if (!match(TokenType.RIGHT_PAR)) {
+      throw new RuntimeException("Expected ')' after columns");
+    }
+
+    if (!match(TokenType.SEMICOLON)) {
+      throw new RuntimeException("Expected ';' after table definition");
     }
 
     return new Expr.Create(tablename, columns);
@@ -173,7 +255,7 @@ public class Parser {
       throw new RuntimeException("Expected column name");
     }
 
-    while (!match(TokenType.COMMA)) {
+    while (!isAtEnd() && peek().type != TokenType.COMMA && !check(TokenType.RIGHT_PAR)) {
       // foreign keys
       if (match(TokenType.REFERENCES)) {
         if (!match(TokenType.IDENTIFIER)) {
@@ -258,11 +340,85 @@ public class Parser {
       throw new RuntimeException("Expected table name after SELECT");
     }
 
-    return new Expr.Select(variables, table, null);
+    // parse optional WHERE clause
+    Expr whereCondition = whereClause();
+    List<Expr> whereList = new ArrayList<>();
+    if (whereCondition != null) {
+      whereList.add(whereCondition);
+    }
+
+    return new Expr.Select(variables, table, whereList);
   }
 
-  private List<Expr> whereClauses() {
-    return null;
+  private Expr whereClause() {
+    if (!match(TokenType.WHERE)) {
+      return null;
+    }
+    return orExpression();
+  }
+
+  private Expr orExpression() {
+    Expr expr = andExpression();
+
+    while (match(TokenType.OR)) {
+      Token operator = previous();
+      Expr right = andExpression();
+      expr = new Expr.Logical(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private Expr andExpression() {
+    Expr expr = logicalPrimary();
+
+    while (match(TokenType.AND)) {
+      Token operator = previous();
+      Expr right = logicalPrimary();
+      expr = new Expr.Logical(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private Expr logicalPrimary() {
+    if (match(TokenType.LEFT_PAR)) {
+      Expr expr = orExpression();
+      if (!match(TokenType.RIGHT_PAR)) {
+        throw new RuntimeException("Expected ')' after logical expression");
+      }
+      return new Expr.Grouping(expr);
+    }
+
+    return equality();
+  }
+
+  private Expr equality() {
+    Expr expr = comparison();
+
+    while (match(TokenType.EQUALS)) {
+      Token operator = previous();
+      Expr right = comparison();
+      expr = new Expr.Binary(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private Expr comparison() {
+    Expr expr = expression();
+
+    while (match(
+        TokenType.GREATER_THAN,
+        TokenType.GREATER_OR_EQ,
+        TokenType.LESS_THAN,
+        TokenType.LESS_THAN_OR_EQ)) {
+      Token operator = previous();
+      Expr right = expression();
+      expr = new Expr.Binary(expr, operator, right);
+    }
+
+    return expr;
   }
 
   private Expr insertStatement() {

@@ -82,6 +82,19 @@ abstract class Expr {
       this.create = create;
       this.database = database;
     }
+
+    @Override
+    public String toString() {
+      return "EngineExpr{"
+          + "database='"
+          + database
+          + '\''
+          + ", drop="
+          + drop
+          + ", create="
+          + create
+          + '}';
+    }
   }
 
   // represents logical expression

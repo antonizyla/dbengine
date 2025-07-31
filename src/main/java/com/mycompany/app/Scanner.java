@@ -50,6 +50,7 @@ public class Scanner {
     keywords.put("number", TokenType.NUMBER);
     keywords.put("key", TokenType.KEY);
     keywords.put("null", TokenType.NULL);
+    keywords.put("show", TokenType.SHOW);
   }
 
   private final String input;
@@ -122,6 +123,18 @@ public class Scanner {
         break;
       case ',':
         addToken(TokenType.COMMA);
+        break;
+      case '+':
+        addToken(TokenType.PLUS);
+        break;
+      case '-':
+        addToken(TokenType.MINUS);
+        break;
+      case '*':
+        addToken(TokenType.STAR);
+        break;
+      case '/':
+        addToken(TokenType.SLASH);
         break;
       case '\t':
         break;

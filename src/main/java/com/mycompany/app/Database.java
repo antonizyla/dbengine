@@ -1,5 +1,6 @@
 package com.mycompany.app;
 
+import com.mycompany.app.Expr.Create;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +26,16 @@ public final class Database implements Serializable {
   }
 
   /**
+   * Default public interface to run a query on the database.
+   *
+   * @param query SQl Qeury to execute
+   * @return true if the query was successful, false otherwise
+   */
+  public boolean runQuery(String query) {
+    return runQuery(query, false);
+  }
+
+  /**
    * Public Interface to run a query on the database.
    *
    * @param query SQL query to run on the database
@@ -45,28 +56,92 @@ public final class Database implements Serializable {
     // parse the tokens into an AST
     Parser parser = new Parser(tokens);
     if (debug) {
-      System.out.println("Parsed AST: "); // should get some sort of AST pretty printing
+      System.out.println("Parsed AST: ");
+      // TODO: some sort of AST pretty printing
       for (Expr expr : parser.parse()) {
         System.out.println(expr.toString());
       }
     }
 
     List<Expr> statements = parser.parse();
-    if (debug) {
-      System.out.println("Statements: ");
-      for (Expr statement : statements) {
-        System.out.println(statement.toString());
-      }
-    }
 
     // execute the statements
     for (Expr statement : statements) {
       if (statement instanceof Expr.Select) {
         executeSelect((Expr.Select) statement);
+      } else if (statement instanceof Expr.Create) {
+        System.out.println("[][][] Executing CREATE statement: " + statement.toString());
+        executeCreateTable((Expr.Create) statement, true);
       }
     }
 
     return false;
+  }
+
+  private void executeCreateTable(Create statement, boolean debug) {
+    // check that the table does not already exist
+    if (tables.containsKey(statement.tableName)) {
+      throw new RuntimeException("Table " + statement.tableName + " already exists.");
+    }
+
+    if (debug) {
+      System.out.println("Creating table: " + statement.tableName);
+      for (Column column : statement.columns) {
+        System.out.println(
+            "Column: "
+                + column.name()
+                + ", Type: "
+                + column.type()
+                + ", Nullable: "
+                + column.nullable()
+                + ", Primary: "
+                + column.primary()
+                + ", Foreign Key: "
+                + column.dependsOn());
+      }
+      System.out.println("Table does not already exist, proceeding with creation.");
+    }
+
+    // check that foreign keys are valid
+    for (Column column : statement.columns) {
+      if (column.dependsOn() != null) {
+        Table foreignTable = getTable(column.dependsOn().split(".")[0]);
+        if (!foreignTable.hasColumn(column.dependsOn().split(".")[1])) {
+          throw new RuntimeException(
+              "Foreign key `"
+                  + column.dependsOn()
+                  + "` does not exist in table "
+                  + foreignTable.getName());
+        }
+        if (column.dependsOn().split(".")[0].equals(statement.tableName)) {
+          throw new RuntimeException(
+              "Foreign key `"
+                  + column.dependsOn()
+                  + "` cannot reference the same table "
+                  + statement.tableName);
+        }
+      }
+    }
+
+    if (debug) {
+      System.out.println("Foreign keys exist in other tables in database.");
+    }
+
+    // check that there exists at least one primary key
+    boolean hasPrimaryKey = false;
+    for (Column column : statement.columns) {
+      if (column.primary()) {
+        hasPrimaryKey = true;
+        break;
+      }
+    }
+    if (!hasPrimaryKey) {
+      throw new RuntimeException(
+          "Table " + statement.tableName + " must have at least one primary key.");
+    }
+
+    // create the table
+    tables.put(statement.tableName, new Table(statement.tableName, statement.columns));
   }
 
   private void executeSelect(Expr.Select select) {
@@ -123,10 +198,10 @@ public final class Database implements Serializable {
   /**
    * Create table from definitions of columns and name.
    *
-   * @param definitions Definition of each columns
    * @param name Name of the table
+   * @param definitions Definition of each columns
    */
-  public void createTable(List<Column> definitions, String name) {
+  public void createTable(String name, List<Column> definitions) {
     tables.put(name, new Table(name, definitions));
   }
 

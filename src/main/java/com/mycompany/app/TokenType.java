@@ -12,6 +12,10 @@ enum TokenType {
   LESS_THAN_OR_EQ,
   SEMICOLON,
   COMMA,
+  PLUS,
+  MINUS,
+  STAR,
+  SLASH,
 
   // literals
   IDENTIFIER,
@@ -55,6 +59,7 @@ enum TokenType {
   EXISTS,
   KEY,
   NULL,
+  SHOW,
 
   EOF
 }

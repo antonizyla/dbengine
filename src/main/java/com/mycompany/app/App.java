@@ -1,7 +1,5 @@
 package com.mycompany.app;
 
-import java.util.Scanner;
-
 /** Entry of the CLI Application. */
 public class App {
   /**
@@ -15,17 +13,12 @@ public class App {
 
     System.out.println("Type '.exit' to exit the program.");
 
-    Database db = new Database("testdb", "testdb.db");
-
-    Scanner input = new Scanner(System.in);
-    String command = "";
-    while (!command.equals(".exit")) {
-      System.out.print("dbengine> ");
-      command = input.nextLine().trim();
-      if (!command.equals(".exit")) {
-        db.runQuery(command, true);
+    Engine e = new Engine();
+    if (args.length != 0) {
+      for (String dbName : args) {
+        e.loadDatabase(dbName);
       }
     }
-    input.close();
+    e.evalLoop();
   }
 }

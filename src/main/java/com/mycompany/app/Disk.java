@@ -55,6 +55,11 @@ public class Disk {
     }
   }
 
+  /**
+   * Delete a database at a given filepath.
+   *
+   * @param filepath filepath to delete.
+   */
   public static void deleteDatabase(String filepath) {
     try {
       File f = new File(filepath);
