@@ -20,6 +20,18 @@ abstract class Expr {
     }
   }
 
+  static class Insert extends Expr {
+    final Token table;
+    final List<Expr> columns;
+    final List<Expr> values;
+
+    Insert(List<Expr> columns, Token table, List<Expr> values) {
+      this.columns = columns;
+      this.table = table;
+      this.values = values;
+    }
+  }
+
   static class Create extends Expr {
     final String tableName;
     final List<Column> columns;

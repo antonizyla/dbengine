@@ -51,6 +51,7 @@ public class Scanner {
     keywords.put("key", TokenType.KEY);
     keywords.put("null", TokenType.NULL);
     keywords.put("show", TokenType.SHOW);
+    keywords.put("into", TokenType.INTO);
   }
 
   private final String input;

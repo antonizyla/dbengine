@@ -319,8 +319,7 @@ public class Parser {
     }
 
     // parse the variables
-    while (match(TokenType.IDENTIFIER)) {
-
+    while (match(TokenType.STAR, TokenType.IDENTIFIER)) {
       variables.add(new Expr.Literal(previous().literal)); // give just the name of the column
 
       if (!match(TokenType.COMMA)) {
@@ -421,8 +420,80 @@ public class Parser {
     return expr;
   }
 
-  private Expr insertStatement() {
-    return null;
+  protected Expr insertStatement() {
+
+    if (!match(TokenType.INSERT)) {
+      throw new RuntimeException("Requires Insert Statement");
+    }
+
+    if (match(TokenType.INTO)) {
+      System.out.println("Matched into");
+    } else {
+      throw new RuntimeException("Requires INTO after Insert");
+    }
+    // parse the table;
+    Token table = null;
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Requires table to be specified");
+    } else {
+      table = previous();
+    }
+
+    List<Expr> columns = new ArrayList<Expr>();
+    List<Expr> values = new ArrayList<Expr>();
+
+    // parse the list of columns to insert into
+    if (check(TokenType.STAR)) {
+      match(TokenType.STAR);
+      columns.add(new Expr.Literal(previous()));
+    } else {
+      if (!match(TokenType.LEFT_PAR)) {
+        throw new RuntimeException(
+            "Missing opening bracket, Columns to be inserted need to be of form `(col, col2, col3)`"
+                + " or `*`");
+      }
+
+      while (!check(TokenType.RIGHT_PAR)
+          && (check(TokenType.COMMA) || check(TokenType.IDENTIFIER))) {
+        if (check(TokenType.COMMA)) {
+          match(TokenType.COMMA);
+        } else if (!match(TokenType.IDENTIFIER)) {
+          throw new RuntimeException("Error gl");
+        } else {
+          columns.add(new Expr.Literal(previous().lexeme));
+        }
+      }
+
+      if (!match(TokenType.RIGHT_PAR)) {
+        throw new RuntimeException(
+            "Missing Closing Bracket, Columns to be inserted need to be of form `(col, col2,"
+                + " col3...)` or `*`");
+      }
+    }
+
+    if (!match(TokenType.VALUES)) {
+      throw new RuntimeException("Missing Values");
+    }
+
+    if (!match(TokenType.LEFT_PAR)) {
+      throw new RuntimeException("Missing opening bracket");
+    }
+
+    while (!check(TokenType.RIGHT_PAR) && (check(TokenType.COMMA) || check(TokenType.IDENTIFIER))) {
+      if (check(TokenType.COMMA)) {
+        match(TokenType.COMMA);
+      } else if (!match(TokenType.IDENTIFIER)) {
+        throw new RuntimeException("Error gl");
+      } else {
+        values.add(new Expr.Literal(previous().lexeme));
+      }
+    }
+
+    if (!match(TokenType.RIGHT_PAR)) {
+      throw new RuntimeException("Missing Closing Bracket");
+    }
+
+    return new Expr.Insert(columns, table, values);
   }
 
   private boolean match(TokenType... types) {

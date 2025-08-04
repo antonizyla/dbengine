@@ -85,9 +85,6 @@ public class Engine implements Serializable {
     current = null;
   }
 
-  @SuppressWarnings("unused")
-  private void showDatabases() {}
-
   private void createDatabase(String databaseName) {
     // Create a new database and add it to the list
     databases.add(databaseName);

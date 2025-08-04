@@ -60,6 +60,7 @@ enum TokenType {
   KEY,
   NULL,
   SHOW,
+  INTO,
 
   EOF
 }
