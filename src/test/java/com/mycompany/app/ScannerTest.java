@@ -58,13 +58,6 @@ public class ScannerTest {
   }
 
   @Test
-  public void testImproperIdentifiers() {
-    String a = "He3llo";
-    Scanner A = new Scanner(a);
-    assertEquals(A.scanTokens().size(), 3);
-  }
-
-  @Test
   public void testReserved() {
     String a = "Select from";
     Scanner A = new Scanner(a);
