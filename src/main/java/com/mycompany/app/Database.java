@@ -73,7 +73,7 @@ public final class Database implements Serializable {
       } else if (statement instanceof Expr.Create) {
         System.out.println("Executing CREATE statement: " + statement.toString());
         executeCreateTable((Expr.Create) statement, false);
-      } else if (statement instanceof Expr.Insert){
+      } else if (statement instanceof Expr.Insert) {
         System.out.println("Executing Insert statement: " + statement.toString());
       }
     }
@@ -170,10 +170,10 @@ public final class Database implements Serializable {
     }
   }
 
-  private void executeInsert(Expr.Insert stmt){
+  private void executeInsert(Expr.Insert stmt) {
     // check that table exists
     Table table = getTable(stmt.table.lexeme);
-    if (table == null){
+    if (table == null) {
       System.err.println("Table " + stmt.table.lexeme + " does not exist.");
       return;
     }
@@ -181,25 +181,27 @@ public final class Database implements Serializable {
     List<Column> nonNullableInserted = new ArrayList<>();
 
     // check that each column provided exists
-    for (Expr column : stmt.columns){
+    for (Expr column : stmt.columns) {
       Expr.Literal col = (Expr.Literal) column;
-      if (!table.hasColumn(col.value.toString())){
-        System.err.println("Table " + stmt.table.lexeme + " does not contain column " + col.value.toString());
+      if (!table.hasColumn(col.value.toString())) {
+        System.err.println(
+            "Table " + stmt.table.lexeme + " does not contain column " + col.value.toString());
         return;
       }
-      if (!table.getColumn(name).nullable()){
+      if (!table.getColumn(name).nullable()) {
         nonNullableInserted.add(table.getColumn(name));
       }
     }
     // check that any unspecified columns are nullable
     // by comparing nonNullableInserted and nonNullable
     List<Column> nonNullable = table.getNonNullableColumns();
-    if (nonNullable.size() != nonNullableInserted.size()){
-      System.err.println("There is 1 or more columns that are non nullable that have not been given a value");
+    if (nonNullable.size() != nonNullableInserted.size()) {
+      System.err.println(
+          "There is 1 or more columns that are non nullable that have not been given a value");
       return;
     }
 
-    //Actually insert into the table
+    // Actually insert into the table
     List<String> row = new ArrayList<>();
     for (Column column : table.getColumns()) {
       if (stmt.columns.contains(new Expr.Literal(column.name()))) {
@@ -209,9 +211,8 @@ public final class Database implements Serializable {
       } else {
         System.err.println("Column " + column.name() + " is non-nullable and has no value.");
         return;
-      } 
+      }
     }
-
   }
 
   /**

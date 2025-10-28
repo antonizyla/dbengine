@@ -286,5 +286,4 @@ public class ParserTest extends Parser {
       current = logical.left;
     }
   }
-
 }
