@@ -446,7 +446,9 @@ public class Parser {
     if (check(TokenType.STAR)) {
       match(TokenType.STAR);
       columns.add(new Expr.Literal(previous()));
+      System.out.println("Inserting into all columns of table " + table.lexeme);
     } else {
+      System.out.println("Inserting Some/Specific columns of table " + table.lexeme);
       if (!match(TokenType.LEFT_PAR)) {
         throw new RuntimeException(
             "Missing opening bracket, Columns to be inserted need to be of form `(col, col2, col3)`"
@@ -490,7 +492,7 @@ public class Parser {
     }
 
     if (!match(TokenType.RIGHT_PAR)) {
-      throw new RuntimeException("Missing Closing Bracket");
+      throw new RuntimeException("[Parser] Insert Parsing: Missing Closing Bracket");
     }
 
     return new Expr.Insert(columns, table, values);

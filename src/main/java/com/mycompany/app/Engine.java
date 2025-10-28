@@ -57,7 +57,7 @@ public class Engine implements Serializable {
         } else {
           // Operating on the current database
           try {
-            current.runQuery(input, true);
+            current.runQuery(input, false);
           } catch (Exception e) {
             System.out.println("Error executing command: " + e.getMessage());
           }

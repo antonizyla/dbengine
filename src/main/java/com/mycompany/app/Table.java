@@ -4,13 +4,15 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** A representation of a Database table to interact with it using java. */
 public class Table implements Serializable {
 
   private final ArrayList<Column> columns; // the 'schema' of the table
   private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
-  // ^ above is always {pk} {col1}, {col2}, ..., {coln} where pk is the primary key
+  // ^ above is always {pk} {col1}, {col2}, ..., {coln} where pk is the primary
+  // key
   private final String name; // table name
 
   private final ArrayList<Integer> pkIndexes;
@@ -31,11 +33,20 @@ public class Table implements Serializable {
     return new ArrayList<>(this.columns);
   }
 
+  public List<Column> getNonNullableColumns() {
+    return new ArrayList<Column>(
+        this.columns.stream().filter((c) -> !c.nullable()).collect(Collectors.toList()));
+  }
+
+  public Column getColumn(String columnName) {
+    return columns.get(columnLocationMap.get(columnName));
+  }
+
   /**
    * Creation of a Database Table.
    *
    * @param tableName - Name of the table
-   * @param cols - List of Columns to defin the schema
+   * @param cols      - List of Columns to defin the schema
    */
   public Table(final String tableName, final List<Column> cols) {
     this.columns = new ArrayList<>(cols.size());
@@ -87,7 +98,7 @@ public class Table implements Serializable {
    * Select Data from table.
    *
    * @param colmns which columns you want to get
-   * @param limit maximum number of rows
+   * @param limit  maximum number of rows
    * @return the data as list of list of strings
    */
   public List<List<String>> select(final List<String> colmns, final Integer limit) {
@@ -117,7 +128,7 @@ public class Table implements Serializable {
   /**
    * Get the value of a column in a specific row.
    *
-   * @param rowPkey the primary key of the row
+   * @param rowPkey    the primary key of the row
    * @param columnName the column name as a string
    * @return the value of the attribute
    */
