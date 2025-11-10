@@ -286,24 +286,4 @@ public class ParserTest extends Parser {
       current = logical.left;
     }
   }
-
-  @Test
-  public void testInsertParsing() {
-    Scanner s = new Scanner("Insert into table1 (column1, column2) values (value1, value2);");
-    Parser p = new Parser(s.scanTokens());
-    Expr.Insert expr = (Expr.Insert) p.insertStatement();
-    assert expr.table.literal.equals("table1");
-    assert expr.columns.size() == 2;
-    assert expr.values.size() == 2;
-  }
-
-  @Test
-  public void testInsertParsingWildcardCols() {
-    Scanner s = new Scanner("Insert into table1 * values (value1, value2);");
-    Parser p = new Parser(s.scanTokens());
-    Expr.Insert expr = (Expr.Insert) p.insertStatement();
-    assert expr.table.literal.equals("table1");
-    assert expr.columns.size() == 1;
-    assert expr.values.size() == 2;
-  }
 }

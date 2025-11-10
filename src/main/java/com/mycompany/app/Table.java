@@ -4,13 +4,15 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** A representation of a Database table to interact with it using java. */
 public class Table implements Serializable {
 
   private final ArrayList<Column> columns; // the 'schema' of the table
   private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
-  // ^ above is always {pk} {col1}, {col2}, ..., {coln} where pk is the primary key
+  // ^ above is always {pk} {col1}, {col2}, ..., {coln} where pk is the primary
+  // key
   private final String name; // table name
 
   private final ArrayList<Integer> pkIndexes;
@@ -29,6 +31,15 @@ public class Table implements Serializable {
 
   public List<Column> getColumns() {
     return new ArrayList<>(this.columns);
+  }
+
+  public List<Column> getNonNullableColumns() {
+    return new ArrayList<Column>(
+        this.columns.stream().filter((c) -> !c.nullable()).collect(Collectors.toList()));
+  }
+
+  public Column getColumn(String columnName) {
+    return columns.get(columnLocationMap.get(columnName));
   }
 
   /**
