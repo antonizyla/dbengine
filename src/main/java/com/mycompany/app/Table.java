@@ -4,17 +4,43 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** A representation of a Database table to interact with it using java. */
 public class Table implements Serializable {
 
   private final ArrayList<Column> columns; // the 'schema' of the table
   private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
+  // ^ above is always {pk} {col1}, {col2}, ..., {coln} where pk is the primary
+  // key
   private final String name; // table name
 
   private final ArrayList<Integer> pkIndexes;
 
   private final HashMap<String, List<String>> data; // hold the primary key and the row
+
+  /**
+   * Check if the table has a column with the given name.
+   *
+   * @param columnName The column to check for
+   * @return if the column exists in the table
+   */
+  public boolean hasColumn(final String columnName) {
+    return columnLocationMap.containsKey(columnName);
+  }
+
+  public List<Column> getColumns() {
+    return new ArrayList<>(this.columns);
+  }
+
+  public List<Column> getNonNullableColumns() {
+    return new ArrayList<Column>(
+        this.columns.stream().filter((c) -> !c.nullable()).collect(Collectors.toList()));
+  }
+
+  public Column getColumn(String columnName) {
+    return columns.get(columnLocationMap.get(columnName));
+  }
 
   /**
    * Creation of a Database Table.
@@ -36,16 +62,17 @@ public class Table implements Serializable {
 
     for (int i = 0; i < cols.size(); i++) {
       columnLocationMap.put(cols.get(i).name(), i + 1);
+
       if (cols.get(i).primary()) {
         pkIndexes.add(i);
       }
     }
 
+    columnLocationMap.put("primary_key", 0);
     /*
      * the internal primary key will be copied into row 0 regardless, also works
      * with composite keys
      */
-    columnLocationMap.put("primary_key", 0);
 
     data = new HashMap<>();
   }
@@ -106,6 +133,9 @@ public class Table implements Serializable {
    * @return the value of the attribute
    */
   public String getRowCol(final String rowPkey, final String columnName) {
+    if (!columnLocationMap.containsKey(columnName)) {
+      throw new RuntimeException("Column " + columnName + " does not exist in table " + name);
+    }
     int index = columnLocationMap.get(columnName);
     return data.get(rowPkey).get(index);
   }
@@ -142,6 +172,12 @@ public class Table implements Serializable {
     System.out.println();
   }
 
+  /**
+   * Generate the primary key for a row based on the indexes of the primary keys.
+   *
+   * @param row the row to generate the primary key
+   * @return the primary key as a string
+   */
   private String getPk(final List<String> row) {
     String pk = "";
     for (var index : pkIndexes) {

@@ -1,7 +1,5 @@
 package com.mycompany.app;
 
-import java.util.List;
-
 /** Entry of the CLI Application. */
 public class App {
   /**
@@ -10,36 +8,17 @@ public class App {
    * @param args command line arguments
    */
   public static void main(String[] args) {
+    // create infitie loop to read commands
+    System.out.println("--Welcome to the dbengine!--");
 
-    Database d = new Database("testing", "./testingdbfile");
+    System.out.println("Type '.exit' to exit the program.");
 
-    d.createTable(
-        List.of(
-            new Column[] {
-              new Column("username", "", false, true, ""),
-              new Column("password", "", false, false, "")
-            }),
-        "Users");
-
-    d.getTable("Users").insert(List.of("Liam Crossley", "passowrd"));
-    d.getTable("Users").printData();
-
-    Disk.writeDatabase(d);
-
-    var e = Disk.readDatabase("testingdbfile");
-
-    e.getTable("Users").printData();
-  }
-
-  /**
-   * Prints a primitive String Represnetation of a table.
-   *
-   * @param t table object to to be printed
-   */
-  public static void print_table(Table t) {
-    System.out.printf("Printing Table: %s%n", t.getName());
-    t.printHeader();
-    // t.select(List.of(new String[]{"*"}), 0);
-    t.printData();
+    Engine e = new Engine();
+    if (args.length != 0) {
+      for (String dbName : args) {
+        e.loadDatabase(dbName);
+      }
+    }
+    e.evalLoop();
   }
 }
