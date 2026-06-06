@@ -59,7 +59,7 @@ public class FileTest {
     try {
       // create a new database and write it to disk
       var db = new Database("dbname", "./file");
-      db.createTable("Users", List.of(new Column("username", null, false, true, null)));
+      db.createTable(List.of(new Column("username", null, false, true, null)), "Users");
       db.getTable("Users").insert(List.of("Liam"));
       Disk.writeDatabase(db);
 
