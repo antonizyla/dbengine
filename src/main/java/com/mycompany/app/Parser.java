@@ -256,7 +256,7 @@ public class Parser {
     }
 
     while (!isAtEnd() && peek().type != TokenType.COMMA && !check(TokenType.RIGHT_PAR)) {
-      int iterationStart = current;
+      final int iterationStart = current;
 
       // foreign keys
       if (match(TokenType.REFERENCES)) {
