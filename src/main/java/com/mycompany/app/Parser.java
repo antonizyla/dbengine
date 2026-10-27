@@ -256,6 +256,8 @@ public class Parser {
     }
 
     while (!isAtEnd() && peek().type != TokenType.COMMA && !check(TokenType.RIGHT_PAR)) {
+      int iterationStart = current;
+
       // foreign keys
       if (match(TokenType.REFERENCES)) {
         if (!match(TokenType.IDENTIFIER)) {
@@ -296,6 +298,12 @@ public class Parser {
           throw new RuntimeException("Unexpected token after NOT, expected NULL");
         }
         nullable = false;
+      }
+
+      // no constraint matched, so the token can never be consumed
+      if (current == iterationStart) {
+        throw new RuntimeException(
+            String.format("Unexpected token '%s' in column definition", peek().lexeme));
       }
     }
 

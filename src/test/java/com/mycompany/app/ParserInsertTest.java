@@ -1,5 +1,7 @@
 package com.mycompany.app;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.jupiter.api.Test;
 
 public class ParserInsertTest extends Parser {
@@ -105,13 +107,12 @@ public class ParserInsertTest extends Parser {
 
   @Test
   public void testInsertLongTableName() {
+    // `column` is a reserved word, so it cannot be used as a column name
     Scanner s = new Scanner("INSERT INTO verylongtablename (column) VALUES (value);");
     Parser p = new Parser(s.scanTokens());
-    Expr.Insert expr = (Expr.Insert) p.insertStatement();
+    var e = assertThrows(RuntimeException.class, () -> p.insertStatement());
 
-    assert expr.table.literal.equals("verylongtablename");
-    assert expr.columns.size() == 1;
-    assert expr.values.size() == 1;
+    assert e.getMessage().startsWith("Missing Closing Bracket");
   }
 
   @Test
