@@ -4,18 +4,6 @@ A sqlite type database engine that works on a *limited* subset of SQL. Using a r
 
 Automated testing using GitHub Actions on every commit using `JUnit` and builds using Maven.
 
-# Creating a Database
+# Creating a Database, Insertion and Retrieval
 
-Like a traditional DBMS creation of databases is straightforward.
-
-```
->> CREATE DATABASE databaseName;
-```
-
-Then to enter a database simply do as follows
-
-```
->> databaseName;
-```
-
-# Creating a Table
+![create-insert-retrieve](create-insert-retrieve.gif)
