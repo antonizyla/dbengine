@@ -237,8 +237,7 @@ public class Table implements Serializable {
   public void insert(final List<String> r) {
     if (r.size() != columns.size()) {
       throw new RuntimeException(
-          String.format(
-              "Table %s expects %d values but got %d", name, columns.size(), r.size()));
+          String.format("Table %s expects %d values but got %d", name, columns.size(), r.size()));
     }
     String pk = getPk(r);
     if (data.containsKey(pk)) {

@@ -212,8 +212,8 @@ public final class Database implements Serializable {
   }
 
   /**
-   * Validate an insert statement against the table schema and store the row. The row is only
-   * stored once every check has passed, so a failed insert leaves the table unchanged.
+   * Validate an insert statement against the table schema and store the row. The row is only stored
+   * once every check has passed, so a failed insert leaves the table unchanged.
    *
    * @param stmt the parsed insert statement
    * @throws RuntimeException describing the first validation failure
@@ -261,8 +261,7 @@ public final class Database implements Serializable {
     List<String> row = new ArrayList<>();
     for (Column column : table.getColumns()) {
       int position = targetColumns.indexOf(column.name());
-      Object value =
-          position < 0 ? null : ((Expr.Literal) stmt.values.get(position)).value;
+      Object value = position < 0 ? null : ((Expr.Literal) stmt.values.get(position)).value;
 
       if (value == null) {
         if (!column.nullable()) {
@@ -280,10 +279,7 @@ public final class Database implements Serializable {
         Table foreignTable = getTable(reference[0]);
         if (foreignTable == null || !foreignTable.containsValue(reference[1], stored)) {
           throw new RuntimeException(
-              "Foreign key violation: "
-                  + stored
-                  + " does not exist in "
-                  + column.dependsOn());
+              "Foreign key violation: " + stored + " does not exist in " + column.dependsOn());
         }
       }
 

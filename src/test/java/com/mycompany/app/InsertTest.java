@@ -48,8 +48,7 @@ public class InsertTest {
   public void testInsertAllColumnsImplicitlyAndWithStar() {
     db.runQuery("insert into users values (1, \"Alice\", NULL);");
     db.runQuery("insert into users * values (2, \"Bob\", bobby);");
-    assertEquals(
-        List.of(Arrays.asList("1", "Alice", null), List.of("2", "Bob", "bobby")), users());
+    assertEquals(List.of(Arrays.asList("1", "Alice", null), List.of("2", "Bob", "bobby")), users());
   }
 
   @Test
@@ -162,8 +161,10 @@ public class InsertTest {
     var e =
         assertThrows(
             RuntimeException.class,
-            () -> db.runQuery("create table pets (id number primary key, owner number references"
-                + " ghosts(id));"));
+            () ->
+                db.runQuery(
+                    "create table pets (id number primary key, owner number references"
+                        + " ghosts(id));"));
     assertEquals(
         "Foreign key `ghosts.id` references table ghosts which does not exist", e.getMessage());
   }
