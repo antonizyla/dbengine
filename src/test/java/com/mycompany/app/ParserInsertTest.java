@@ -241,4 +241,49 @@ public class ParserInsertTest extends Parser {
     assert expr.columns.size() == 1;
     assert expr.values.size() == 0;
   }
+
+  private Expr.Insert parse(String sql) {
+    return (Expr.Insert) new Parser(new Scanner(sql).scanTokens()).insertStatement();
+  }
+
+  @Test
+  public void testInsertTypedValues() {
+    Expr.Insert expr =
+        parse("INSERT INTO t (a, b, c, d, e) VALUES (12, -3.5, \"hi there\", NULL, bob);");
+
+    assert expr.values.size() == 5;
+    assert ((Expr.Literal) expr.values.get(0)).value.equals(12.0);
+    assert ((Expr.Literal) expr.values.get(1)).value.equals(-3.5);
+    assert ((Expr.Literal) expr.values.get(2)).value.equals("hi there");
+    assert ((Expr.Literal) expr.values.get(3)).value == null;
+    assert ((Expr.Literal) expr.values.get(4)).value.equals("bob");
+  }
+
+  @Test
+  public void testInsertOmittedColumnListMeansAllColumns() {
+    Expr.Insert expr = parse("INSERT INTO t VALUES (1, 2)");
+
+    assert expr.columns.size() == 1;
+    assert ((Expr.Literal) expr.columns.get(0)).value.equals(Parser.ALL_COLUMNS);
+    assert expr.values.size() == 2;
+  }
+
+  @Test
+  public void testInsertWildcardIsAllColumns() {
+    Expr.Insert expr = parse("INSERT INTO t * VALUES (1)");
+
+    assert ((Expr.Literal) expr.columns.get(0)).value.equals(Parser.ALL_COLUMNS);
+  }
+
+  @Test
+  public void testInsertTrailingCommaInColumns() {
+    var e = assertThrows(RuntimeException.class, () -> parse("INSERT INTO t (a,) VALUES (1)"));
+    assert e.getMessage().equals("Expected column name after ','");
+  }
+
+  @Test
+  public void testInsertTrailingCommaInValues() {
+    var e = assertThrows(RuntimeException.class, () -> parse("INSERT INTO t (a) VALUES (1,)"));
+    assert e.getMessage().equals("Expected value after ','");
+  }
 }

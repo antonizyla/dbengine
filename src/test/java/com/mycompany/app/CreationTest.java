@@ -211,4 +211,11 @@ public class CreationTest {
     assert res.get(0).get(0).equals("23");
     assert res.get(0).get(1).equals("Alice");
   }
+
+  @Test
+  public void testColumnNullableByDefault() {
+    Column column = new Parser(new Scanner("nickname String,").scanTokens()).column();
+    assert column.nullable();
+    assert !column.primary();
+  }
 }

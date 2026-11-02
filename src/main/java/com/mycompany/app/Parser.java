@@ -5,6 +5,9 @@ import java.util.List;
 
 /** Allow for reading in sql and converting to an AST. */
 public class Parser {
+  /** Column name used in an insert statement to mean every column of the table. */
+  static final String ALL_COLUMNS = "*";
+
   private final List<Token> tokens;
   private int current = 0;
 
@@ -312,7 +315,8 @@ public class Parser {
     }
 
     if (String.format("%s.%s", foreignTable, foreignColumn).equals(".")) {
-      return new Column(name, type, false, isPrimaryKey, null);
+      // primary key columns can never be null
+      return new Column(name, type, nullable && !isPrimaryKey, isPrimaryKey, null);
     }
     return new Column(
         name, type, nullable, isPrimaryKey, String.format("%s.%s", foreignTable, foreignColumn));
@@ -328,7 +332,7 @@ public class Parser {
 
     // parse the variables
     while (match(TokenType.STAR, TokenType.IDENTIFIER)) {
-      variables.add(new Expr.Literal(previous().literal)); // give just the name of the column
+      variables.add(new Expr.Literal(previous().lexeme)); // give just the name of the column
 
       if (!match(TokenType.COMMA)) {
         break; // if no comma continue to next variable by doing loop again
@@ -428,50 +432,50 @@ public class Parser {
     return expr;
   }
 
+  /**
+   * Parse an insert statement of the form {@code INSERT INTO table [(col, ...) | *] VALUES (value,
+   * ...) [;]}. Omitting the column list, or using {@code *}, inserts into every column in schema
+   * order; this is represented as a single {@code Literal("*")} column.
+   *
+   * @return the parsed {@link Expr.Insert}
+   */
   protected Expr insertStatement() {
-
     if (!match(TokenType.INSERT)) {
       throw new RuntimeException("Requires Insert Statement");
     }
 
-    if (match(TokenType.INTO)) {
-      System.out.println("Matched into");
-    } else {
+    if (!match(TokenType.INTO)) {
       throw new RuntimeException("Requires INTO after Insert");
     }
-    // parse the table;
-    Token table = null;
+
     if (!match(TokenType.IDENTIFIER)) {
       throw new RuntimeException("Requires table to be specified");
-    } else {
-      table = previous();
     }
+    final Token table = previous();
 
-    List<Expr> columns = new ArrayList<Expr>();
-    List<Expr> values = new ArrayList<Expr>();
+    List<Expr> columns = new ArrayList<>();
+    List<Expr> values = new ArrayList<>();
 
     // parse the list of columns to insert into
-    if (check(TokenType.STAR)) {
-      match(TokenType.STAR);
-      columns.add(new Expr.Literal(previous()));
-      System.out.println("Inserting into all columns of table " + table.lexeme);
+    if (match(TokenType.STAR) || check(TokenType.VALUES)) {
+      columns.add(new Expr.Literal(ALL_COLUMNS));
     } else {
-      System.out.println("Inserting Some/Specific columns of table " + table.lexeme);
       if (!match(TokenType.LEFT_PAR)) {
         throw new RuntimeException(
             "Missing opening bracket, Columns to be inserted need to be of form `(col, col2, col3)`"
                 + " or `*`");
       }
 
-      while (!check(TokenType.RIGHT_PAR)
-          && (check(TokenType.COMMA) || check(TokenType.IDENTIFIER))) {
-        if (check(TokenType.COMMA)) {
-          match(TokenType.COMMA);
-        } else if (!match(TokenType.IDENTIFIER)) {
-          throw new RuntimeException("Error gl");
-        } else {
+      if (!check(TokenType.RIGHT_PAR)) {
+        do {
+          if (!match(TokenType.IDENTIFIER)) {
+            if (columns.isEmpty()) {
+              break; // reported as a missing closing bracket below
+            }
+            throw new RuntimeException("Expected column name after ','");
+          }
           columns.add(new Expr.Literal(previous().lexeme));
-        }
+        } while (match(TokenType.COMMA));
       }
 
       if (!match(TokenType.RIGHT_PAR)) {
@@ -489,21 +493,55 @@ public class Parser {
       throw new RuntimeException("Missing opening bracket");
     }
 
-    while (!check(TokenType.RIGHT_PAR) && (check(TokenType.COMMA) || check(TokenType.IDENTIFIER))) {
-      if (check(TokenType.COMMA)) {
-        match(TokenType.COMMA);
-      } else if (!match(TokenType.IDENTIFIER)) {
-        throw new RuntimeException("Error gl");
-      } else {
-        values.add(new Expr.Literal(previous().lexeme));
-      }
+    if (!check(TokenType.RIGHT_PAR)) {
+      do {
+        Expr value = insertValue();
+        if (value == null) {
+          if (values.isEmpty()) {
+            break; // reported as a missing closing bracket below
+          }
+          throw new RuntimeException("Expected value after ','");
+        }
+        values.add(value);
+      } while (match(TokenType.COMMA));
     }
 
     if (!match(TokenType.RIGHT_PAR)) {
       throw new RuntimeException("[Parser] Insert Parsing: Missing Closing Bracket");
     }
 
+    match(TokenType.SEMICOLON); // optional terminator
+
     return new Expr.Insert(columns, table, values);
+  }
+
+  /**
+   * Parse a single value of an insert statement. Numbers become {@link Double}, quoted strings and
+   * bare words become {@link String}, and {@code NULL} becomes a literal holding {@code null}.
+   *
+   * @return the literal, or {@code null} if the next token is not a value
+   */
+  private Expr.Literal insertValue() {
+    if (match(TokenType.NUMBER)) {
+      return new Expr.Literal(previous().literal);
+    }
+    if (check(TokenType.MINUS)
+        && current + 1 < tokens.size()
+        && tokens.get(current + 1).type == TokenType.NUMBER) {
+      advance();
+      advance();
+      return new Expr.Literal(-((Double) previous().literal));
+    }
+    if (match(TokenType.STRING_LITERAL)) {
+      return new Expr.Literal(previous().literal);
+    }
+    if (match(TokenType.IDENTIFIER)) {
+      return new Expr.Literal(previous().lexeme);
+    }
+    if (match(TokenType.NULL)) {
+      return new Expr.Literal(null);
+    }
+    return null;
   }
 
   private boolean match(TokenType... types) {

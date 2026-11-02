@@ -1,5 +1,6 @@
 package com.mycompany.app;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,28 +37,16 @@ public class Engine implements Serializable {
         // Process the command
         if (current == null) {
           // the current database is null so in engine mode
-          com.mycompany.app.Scanner scanner = new com.mycompany.app.Scanner(input);
-
-          List<Token> tokens = scanner.scanTokens();
-
-          Parser parser = new Parser(tokens);
-
-          Expr.EngineExpr command = parser.parseEngineExpr();
-          String dbName = command.database;
-
-          if (command.create && !command.drop) {
-            createDatabase(dbName);
-          } else if (command.drop && !command.create) {
-            dropDatabase(dbName);
-          } else if (!command.create && !command.drop) {
-            enterDatabase(dbName);
-          } else {
-            System.out.println("Unknown command in engine mode.");
+          try {
+            runEngineCommand(input);
+          } catch (Exception e) {
+            System.out.println("Error executing command: " + e.getMessage());
           }
         } else {
-          // Operating on the current database
+          // Operating on the current database, changes are committed after every statement
           try {
             current.runQuery(input, false);
+            current.commit();
           } catch (Exception e) {
             System.out.println("Error executing command: " + e.getMessage());
           }
@@ -67,6 +56,27 @@ public class Engine implements Serializable {
 
     in.close();
     System.out.println(input + " - Exiting dbengine.");
+  }
+
+  private void runEngineCommand(String input) {
+    com.mycompany.app.Scanner scanner = new com.mycompany.app.Scanner(input);
+
+    List<Token> tokens = scanner.scanTokens();
+
+    Parser parser = new Parser(tokens);
+
+    Expr.EngineExpr command = parser.parseEngineExpr();
+    String dbName = command.database;
+
+    if (command.create && !command.drop) {
+      createDatabase(dbName);
+    } else if (command.drop && !command.create) {
+      dropDatabase(dbName);
+    } else if (!command.create && !command.drop) {
+      enterDatabase(dbName);
+    } else {
+      System.out.println("Unknown command in engine mode.");
+    }
   }
 
   /**
@@ -105,12 +115,12 @@ public class Engine implements Serializable {
 
   private void enterDatabase(String databaseName) {
     // Find the database and set it as the current database
-    for (String db : databases) {
-      if (db.equals(databaseName)) {
-        current = Disk.readDatabase(String.format("%s.db", databaseName));
-        System.out.println("Entered database " + databaseName + ".");
-        return;
-      }
+    // databases created in an earlier session are only known by their file on disk
+    String filepath = String.format("%s.db", databaseName);
+    if (databases.contains(databaseName) || new File(filepath).isFile()) {
+      current = Disk.readDatabase(filepath);
+      System.out.println("Entered database " + databaseName + ".");
+      return;
     }
     System.out.println("Database " + databaseName + " not found.");
   }

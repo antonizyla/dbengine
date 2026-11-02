@@ -30,6 +30,11 @@ abstract class Expr {
       this.table = table;
       this.values = values;
     }
+
+    @Override
+    public String toString() {
+      return "Insert{table=" + table.lexeme + ", columns=" + columns + ", values=" + values + "}";
+    }
   }
 
   static class Create extends Expr {
@@ -79,7 +84,7 @@ abstract class Expr {
 
     @Override
     public String toString() {
-      return "Literal(" + value.toString() + ")";
+      return "Literal(" + value + ")";
     }
   }
 

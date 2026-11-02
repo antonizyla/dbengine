@@ -3,6 +3,7 @@ package com.mycompany.app;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,7 +18,11 @@ public class Table implements Serializable {
 
   private final ArrayList<Integer> pkIndexes;
 
-  private final HashMap<String, List<String>> data; // hold the primary key and the row
+  // hold the primary key and the row, in insertion order
+  private final HashMap<String, List<String>> data;
+
+  /** Separates the parts of a composite primary key; cannot appear in normal input. */
+  private static final String PK_SEPARATOR = "\u001F";
 
   /**
    * Check if the table has a column with the given name.
@@ -29,17 +34,38 @@ public class Table implements Serializable {
     return columnLocationMap.containsKey(columnName);
   }
 
+  /**
+   * The schema of the table in column order.
+   *
+   * @return copy of the column definitions
+   */
   public List<Column> getColumns() {
     return new ArrayList<>(this.columns);
   }
 
+  /**
+   * The columns of the table that must be given a value.
+   *
+   * @return the columns that are NOT NULL
+   */
   public List<Column> getNonNullableColumns() {
     return new ArrayList<Column>(
         this.columns.stream().filter((c) -> !c.nullable()).collect(Collectors.toList()));
   }
 
+  /**
+   * Get the definition of a column by name.
+   *
+   * @param columnName the column to look up
+   * @return the column definition
+   */
   public Column getColumn(String columnName) {
-    return columns.get(columnLocationMap.get(columnName));
+    Integer location = columnLocationMap.get(columnName);
+    if (location == null || location == 0) {
+      throw new RuntimeException("Column " + columnName + " does not exist in table " + name);
+    }
+    // row offset 0 holds the internal primary key, so schema index is one less
+    return columns.get(location - 1);
   }
 
   /**
@@ -74,7 +100,7 @@ public class Table implements Serializable {
      * with composite keys
      */
 
-    data = new HashMap<>();
+    data = new LinkedHashMap<>();
   }
 
   /**
@@ -104,18 +130,28 @@ public class Table implements Serializable {
   public List<List<String>> select(final List<String> colmns, final Integer limit) {
 
     ArrayList<String> cols = new ArrayList<>(colmns.size());
-    cols.addAll(colmns);
-    if (cols.contains("*")) {
-      cols.addAll(getColumnNames());
+    for (var col : colmns) {
+      if (col.equals("*")) {
+        cols.addAll(getColumnNames());
+      } else {
+        cols.add(col);
+      }
     }
 
     ArrayList<Integer> indexes = new ArrayList<>();
     for (var col : cols) {
-      indexes.add(columnLocationMap.get(col));
+      Integer index = columnLocationMap.get(col);
+      if (index == null) {
+        throw new RuntimeException("Column " + col + " does not exist in table " + name);
+      }
+      indexes.add(index);
     }
 
     List<List<String>> res = new ArrayList<>();
     for (var r : data.values()) {
+      if (limit != null && res.size() >= limit) {
+        break;
+      }
       ArrayList<String> row = new ArrayList<>();
       for (var index : indexes) {
         row.add(r.get(index));
@@ -154,7 +190,7 @@ public class Table implements Serializable {
    */
   public void printRow(final String pkey) {
     for (var attr : data.get(pkey)) {
-      System.out.printf("%s, ", attr);
+      System.out.printf("%s, ", attr == null ? "NULL" : attr);
     }
     System.out.println();
   }
@@ -179,22 +215,65 @@ public class Table implements Serializable {
    * @return the primary key as a string
    */
   private String getPk(final List<String> row) {
-    String pk = "";
+    List<String> parts = new ArrayList<>(pkIndexes.size());
     for (var index : pkIndexes) {
-      pk = String.join(pk, row.get(index));
+      String part = row.get(index);
+      if (part == null) {
+        throw new RuntimeException(
+            "Primary key column " + columns.get(index).name() + " cannot be NULL");
+      }
+      parts.add(part);
     }
-    return pk;
+    return String.join(PK_SEPARATOR, parts);
   }
 
   /**
-   * Insert a row into the table.
+   * Insert a row into the table. Values are in schema order; {@code null} represents SQL NULL.
    *
    * @param r the row to insert as list of string
+   * @throws RuntimeException if the row has the wrong width or its primary key is NULL or already
+   *     present
    */
   public void insert(final List<String> r) {
+    if (r.size() != columns.size()) {
+      throw new RuntimeException(
+          String.format(
+              "Table %s expects %d values but got %d", name, columns.size(), r.size()));
+    }
+    String pk = getPk(r);
+    if (data.containsKey(pk)) {
+      throw new RuntimeException(
+          "Duplicate primary key " + pk.replace(PK_SEPARATOR, ", ") + " in table " + name);
+    }
     List<String> row = new ArrayList<>(r.size() + 1);
-    row.add(getPk(r));
+    row.add(pk);
     row.addAll(r);
-    data.put(row.get(0), row); // this cannot be row.getfirst()
+    data.put(pk, row);
+  }
+
+  /**
+   * Check whether any row holds the given value in a column, used for foreign key checks.
+   *
+   * @param columnName the column to search
+   * @param value the value to look for
+   * @return true if at least one row has that value
+   */
+  public boolean containsValue(final String columnName, final String value) {
+    int index = columnLocationMap.get(getColumn(columnName).name());
+    for (var row : data.values()) {
+      if (value.equals(row.get(index))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Number of rows stored in the table.
+   *
+   * @return row count
+   */
+  public int rowCount() {
+    return data.size();
   }
 }
