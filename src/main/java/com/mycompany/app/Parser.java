@@ -116,6 +116,16 @@ public class Parser {
         System.out.println("Parsing INSERT statement");
       }
       return insertStatement();
+    } else if (check(TokenType.DELETE)) {
+      if (verbose) {
+        System.out.println("Parsing DELETE statement");
+      }
+      return deleteStatement();
+    } else if (check(TokenType.DROP)) {
+      if (verbose) {
+        System.out.println("Parsing DROP statement");
+      }
+      return dropTableStatement();
     }
     return null; // Unimplemented everything else
   }
@@ -188,6 +198,10 @@ public class Parser {
       return new Expr.Literal(previous().lexeme);
     }
 
+    if (match(TokenType.STRING_LITERAL)) {
+      return new Expr.Literal(previous().literal);
+    }
+
     if (match(TokenType.LEFT_PAR)) {
       Expr expr = expression();
       if (!match(TokenType.RIGHT_PAR)) {
@@ -229,8 +243,27 @@ public class Parser {
       throw new RuntimeException("Expected '(' after table name");
     }
 
-    // parse the columns
-    var columns = columnList();
+    // parse the columns and table level constraints
+    List<Column> columns = new ArrayList<>();
+    List<ForeignKey> foreignKeys = new ArrayList<>();
+    List<String> tablePrimaryKey = null;
+    if (!check(TokenType.RIGHT_PAR)) {
+      do {
+        if (match(TokenType.PRIMARY)) {
+          if (!match(TokenType.KEY)) {
+            throw new RuntimeException("Expected KEY after PRIMARY");
+          }
+          if (tablePrimaryKey != null) {
+            throw new RuntimeException("Table " + tablename + " has more than one PRIMARY KEY");
+          }
+          tablePrimaryKey = identifierList("PRIMARY KEY");
+        } else if (match(TokenType.FOREIGN)) {
+          foreignKeys.add(tableForeignKey(tablename));
+        } else {
+          columns.add(column());
+        }
+      } while (match(TokenType.COMMA));
+    }
 
     if (!match(TokenType.RIGHT_PAR)) {
       throw new RuntimeException("Expected ')' after columns");
@@ -240,7 +273,153 @@ public class Parser {
       throw new RuntimeException("Expected ';' after table definition");
     }
 
-    return new Expr.Create(tablename, columns);
+    if (tablePrimaryKey != null) {
+      columns = applyTablePrimaryKey(tablename, columns, tablePrimaryKey);
+    }
+
+    // column level foreign keys become constraints too, ahead of the table level ones
+    List<ForeignKey> allForeignKeys = new ArrayList<>();
+    for (Column column : columns) {
+      if (column.dependsOn() != null) {
+        String[] reference = column.dependsOn().split("\\.");
+        allForeignKeys.add(
+            new ForeignKey(
+                null,
+                tablename,
+                List.of(column.name()),
+                reference[0],
+                List.of(reference[1]),
+                column.onDelete()));
+      }
+    }
+    allForeignKeys.addAll(foreignKeys);
+
+    return new Expr.Create(tablename, columns, allForeignKeys);
+  }
+
+  /**
+   * Mark the columns named in a table level {@code PRIMARY KEY (a, b)} as the primary key.
+   *
+   * @param tablename the table being created, for error messages
+   * @param columns the parsed columns
+   * @param keyColumns the column names inside the clause
+   * @return the columns with key flags applied
+   */
+  private static List<Column> applyTablePrimaryKey(
+      String tablename, List<Column> columns, List<String> keyColumns) {
+    for (Column column : columns) {
+      if (column.primary()) {
+        throw new RuntimeException(
+            "Table " + tablename + " has more than one PRIMARY KEY, column " + column.name());
+      }
+    }
+    List<Column> result = new ArrayList<>(columns);
+    for (String keyColumn : keyColumns) {
+      int index = -1;
+      for (int i = 0; i < result.size(); i++) {
+        if (result.get(i).name().equals(keyColumn)) {
+          index = i;
+        }
+      }
+      if (index < 0) {
+        throw new RuntimeException(
+            "PRIMARY KEY column " + keyColumn + " does not exist in table " + tablename);
+      }
+      result.set(index, result.get(index).withKeyFlags(true, false));
+    }
+    return result;
+  }
+
+  /**
+   * Parse {@code KEY (a, b) REFERENCES parent(x, y) [ON DELETE action]}, after {@code FOREIGN}.
+   *
+   * @param tablename the table being created
+   * @return the constraint, not yet validated against the parent table
+   */
+  private ForeignKey tableForeignKey(String tablename) {
+    if (!match(TokenType.KEY)) {
+      throw new RuntimeException("Expected KEY after FOREIGN");
+    }
+    List<String> childColumns = identifierList("FOREIGN KEY");
+    if (!match(TokenType.REFERENCES)) {
+      throw new RuntimeException("Expected REFERENCES after FOREIGN KEY columns");
+    }
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Expected foreign table name after REFERENCES");
+    }
+    String parentTable = previous().lexeme;
+    List<String> parentColumns = identifierList("REFERENCES " + parentTable);
+    if (childColumns.size() != parentColumns.size()) {
+      throw new RuntimeException(
+          String.format(
+              "FOREIGN KEY has %d columns but references %d columns of %s",
+              childColumns.size(), parentColumns.size(), parentTable));
+    }
+    ReferentialAction onDelete = null;
+    if (match(TokenType.ON)) {
+      onDelete = onDeleteAction();
+    }
+    return new ForeignKey(null, tablename, childColumns, parentTable, parentColumns, onDelete);
+  }
+
+  /**
+   * Parse a bracketed, comma separated list of column names, e.g. {@code (a, b)}.
+   *
+   * @param clause the clause the list belongs to, for error messages
+   * @return the column names
+   */
+  private List<String> identifierList(String clause) {
+    if (!match(TokenType.LEFT_PAR)) {
+      throw new RuntimeException("Expected '(' after " + clause);
+    }
+    List<String> names = new ArrayList<>();
+    do {
+      if (!match(TokenType.IDENTIFIER)) {
+        throw new RuntimeException("Expected column name in " + clause);
+      }
+      names.add(previous().lexeme);
+    } while (match(TokenType.COMMA));
+    if (!match(TokenType.RIGHT_PAR)) {
+      throw new RuntimeException("Expected ')' after " + clause + " columns");
+    }
+    return names;
+  }
+
+  /**
+   * Parse the rest of an {@code ON DELETE <action>} clause, after {@code ON}.
+   *
+   * @return the action
+   */
+  private ReferentialAction onDeleteAction() {
+    if (match(TokenType.UPDATE)) {
+      throw new RuntimeException("ON UPDATE is not supported yet");
+    }
+    if (!match(TokenType.DELETE)) {
+      throw new RuntimeException("Expected DELETE after ON");
+    }
+    if (match(TokenType.CASCADE)) {
+      return ReferentialAction.CASCADE;
+    }
+    if (match(TokenType.RESTRICT)) {
+      return ReferentialAction.RESTRICT;
+    }
+    if (match(TokenType.NO)) {
+      if (!match(TokenType.ACTION)) {
+        throw new RuntimeException("Expected ACTION after NO");
+      }
+      return ReferentialAction.NO_ACTION;
+    }
+    if (match(TokenType.SET)) {
+      if (match(TokenType.NULL)) {
+        return ReferentialAction.SET_NULL;
+      }
+      if (match(TokenType.DEFAULT)) {
+        return ReferentialAction.SET_DEFAULT;
+      }
+      throw new RuntimeException("Expected NULL or DEFAULT after SET");
+    }
+    throw new RuntimeException(
+        "Expected CASCADE, RESTRICT, NO ACTION, SET NULL or SET DEFAULT after ON DELETE");
   }
 
   protected Column column() {
@@ -251,6 +430,8 @@ public class Parser {
     boolean nullable = true;
     String foreignTable = "";
     String foreignColumn = "";
+    ReferentialAction onDelete = null;
+    Object defaultLiteral = null;
 
     if (match(TokenType.IDENTIFIER)) {
       name = previous().lexeme;
@@ -277,8 +458,20 @@ public class Parser {
         if (!match(TokenType.RIGHT_PAR)) {
           throw new RuntimeException("Expected ')' after foreign column name e.g. table(column)");
         }
+      }
 
-        nullable = false; // foreign keys cannot be null
+      // referential action of the foreign key
+      if (match(TokenType.ON)) {
+        onDelete = onDeleteAction();
+      }
+
+      // default value
+      if (match(TokenType.DEFAULT)) {
+        Expr.Literal value = insertValue();
+        if (value == null) {
+          throw new RuntimeException("Expected value after DEFAULT");
+        }
+        defaultLiteral = value.value;
       }
 
       // primary keys
@@ -314,12 +507,84 @@ public class Parser {
       throw new RuntimeException("Expected column type after column name");
     }
 
+    // stored the same way an inserted value would be, which also checks its type
+    String defaultValue =
+        defaultLiteral == null
+            ? null
+            : new Column(name, type, true, false, null).toStoredValue(defaultLiteral);
+
     if (String.format("%s.%s", foreignTable, foreignColumn).equals(".")) {
+      if (onDelete != null) {
+        throw new RuntimeException("ON DELETE requires REFERENCES on column " + name);
+      }
       // primary key columns can never be null
-      return new Column(name, type, nullable && !isPrimaryKey, isPrimaryKey, null);
+      return new Column(
+          name, type, nullable && !isPrimaryKey, isPrimaryKey, null, null, defaultValue);
     }
     return new Column(
-        name, type, nullable, isPrimaryKey, String.format("%s.%s", foreignTable, foreignColumn));
+        name,
+        type,
+        nullable && !isPrimaryKey,
+        isPrimaryKey,
+        String.format("%s.%s", foreignTable, foreignColumn),
+        onDelete,
+        defaultValue);
+  }
+
+  /**
+   * Parse {@code DELETE FROM table [WHERE condition] [;]}.
+   *
+   * @return the parsed {@link Expr.Delete}
+   */
+  protected Expr deleteStatement() {
+    if (!match(TokenType.DELETE)) {
+      throw new RuntimeException("Expected DELETE keyword");
+    }
+    if (!match(TokenType.FROM)) {
+      throw new RuntimeException("Expected FROM after DELETE");
+    }
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Expected table name after DELETE FROM");
+    }
+    final Token table = previous();
+
+    List<Expr> whereList = new ArrayList<>();
+    Expr whereCondition = whereClause();
+    if (whereCondition != null) {
+      whereList.add(whereCondition);
+    }
+
+    match(TokenType.SEMICOLON); // optional terminator
+    // anything left over, such as a misspelt WHERE, must not turn into deleting every row
+    if (!isAtEnd()) {
+      throw new RuntimeException(
+          String.format("Unexpected token '%s' in DELETE statement", peek().lexeme));
+    }
+    return new Expr.Delete(table, whereList);
+  }
+
+  /**
+   * Parse {@code DROP TABLE table [;]}.
+   *
+   * @return the parsed {@link Expr.DropTable}
+   */
+  protected Expr dropTableStatement() {
+    if (!match(TokenType.DROP)) {
+      throw new RuntimeException("Expected DROP keyword");
+    }
+    if (!match(TokenType.TABLE)) {
+      throw new RuntimeException("Expected TABLE after DROP");
+    }
+    if (!match(TokenType.IDENTIFIER)) {
+      throw new RuntimeException("Expected table name after DROP TABLE");
+    }
+    final Token table = previous();
+    match(TokenType.SEMICOLON); // optional terminator
+    if (!isAtEnd()) {
+      throw new RuntimeException(
+          String.format("Unexpected token '%s' in DROP TABLE statement", peek().lexeme));
+    }
+    return new Expr.DropTable(table);
   }
 
   protected Expr selectStatement() {

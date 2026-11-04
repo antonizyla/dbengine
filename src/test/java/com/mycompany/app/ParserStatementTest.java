@@ -38,7 +38,7 @@ public class ParserStatementTest {
 
   @Test
   public void testParseUnsupportedStatement() {
-    var statements = parser("drop table users;").parse();
+    var statements = parser("update users set name = 1;").parse();
     assertEquals(statements.size(), 1);
     assertNull(statements.get(0));
   }

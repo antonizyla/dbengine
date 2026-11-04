@@ -61,6 +61,11 @@ enum TokenType {
   NULL,
   SHOW,
   INTO,
+  CASCADE,
+  RESTRICT,
+  NO,
+  ACTION,
+  DEFAULT,
 
   EOF
 }

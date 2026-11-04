@@ -52,6 +52,11 @@ public class Scanner {
     keywords.put("null", TokenType.NULL);
     keywords.put("show", TokenType.SHOW);
     keywords.put("into", TokenType.INTO);
+    keywords.put("cascade", TokenType.CASCADE);
+    keywords.put("restrict", TokenType.RESTRICT);
+    keywords.put("no", TokenType.NO);
+    keywords.put("action", TokenType.ACTION);
+    keywords.put("default", TokenType.DEFAULT);
   }
 
   private final String input;
