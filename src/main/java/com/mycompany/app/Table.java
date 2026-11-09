@@ -1,14 +1,23 @@
 package com.mycompany.app;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** A representation of a Database table to interact with it using java. */
 public class Table implements Serializable {
+
+  /** Pinned to the value before foreign keys were added, so older database files still load. */
+  private static final long serialVersionUID = -1927445668181961021L;
 
   private final ArrayList<Column> columns; // the 'schema' of the table
   private final HashMap<String, Integer> columnLocationMap; // where in the row a specific column is
@@ -23,6 +32,16 @@ public class Table implements Serializable {
 
   /** Separates the parts of a composite primary key; cannot appear in normal input. */
   private static final String PK_SEPARATOR = "\u001F";
+
+  /** Foreign keys declared by this table. Null only in files written before they existed. */
+  private ArrayList<ForeignKey> foreignKeys;
+
+  /**
+   * For each foreign key name, the child rows grouped by the parent key they reference. Rows with a
+   * NULL in any foreign key column reference nothing and are left out. Derived from {@link #data},
+   * so it is rebuilt on load rather than stored.
+   */
+  private transient Map<String, Map<String, Set<String>>> fkIndex;
 
   /**
    * Check if the table has a column with the given name.
@@ -75,6 +94,18 @@ public class Table implements Serializable {
    * @param cols - List of Columns to defin the schema
    */
   public Table(final String tableName, final List<Column> cols) {
+    this(tableName, cols, List.of());
+  }
+
+  /**
+   * Creation of a Database Table with foreign key constraints. The constraints must already have
+   * been validated against the referenced tables.
+   *
+   * @param tableName - Name of the table
+   * @param cols - List of Columns to defin the schema
+   * @param fks - Foreign keys declared by this table
+   */
+  public Table(final String tableName, final List<Column> cols, final List<ForeignKey> fks) {
     this.columns = new ArrayList<>(cols.size());
     for (var col : cols) {
       this.columns.add(col);
@@ -101,6 +132,155 @@ public class Table implements Serializable {
      */
 
     data = new LinkedHashMap<>();
+    foreignKeys = new ArrayList<>(fks);
+    rebuildForeignKeyIndex();
+  }
+
+  private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    if (foreignKeys != null) {
+      rebuildForeignKeyIndex();
+    }
+  }
+
+  /**
+   * Whether this table was loaded from a file written before foreign key constraints existed.
+   *
+   * @return true if {@link #setForeignKeys} still needs to be called
+   */
+  boolean needsForeignKeyMigration() {
+    return foreignKeys == null;
+  }
+
+  /**
+   * Replace the foreign keys of this table, used when upgrading an older database file.
+   *
+   * @param fks the validated constraints
+   */
+  void setForeignKeys(final List<ForeignKey> fks) {
+    foreignKeys = new ArrayList<>(fks);
+    rebuildForeignKeyIndex();
+  }
+
+  /**
+   * The foreign keys declared by this table.
+   *
+   * @return unmodifiable list of constraints
+   */
+  public List<ForeignKey> getForeignKeys() {
+    return foreignKeys == null ? List.of() : Collections.unmodifiableList(foreignKeys);
+  }
+
+  /**
+   * Names of the primary key columns, in key order.
+   *
+   * @return the primary key column names
+   */
+  public List<String> getPrimaryKeyColumns() {
+    List<String> names = new ArrayList<>(pkIndexes.size());
+    for (var index : pkIndexes) {
+      names.add(columns.get(index).name());
+    }
+    return names;
+  }
+
+  /**
+   * Join the parts of a key the same way rows are keyed internally.
+   *
+   * @param parts the key values in primary key order
+   * @return the internal key
+   */
+  public static String joinKey(final List<String> parts) {
+    return String.join(PK_SEPARATOR, parts);
+  }
+
+  /**
+   * Make an internal key readable for error messages.
+   *
+   * @param key the internal key
+   * @return the key parts separated by commas
+   */
+  public static String displayKey(final String key) {
+    return key.replace(PK_SEPARATOR, ", ");
+  }
+
+  private void rebuildForeignKeyIndex() {
+    fkIndex = new HashMap<>();
+    for (var fk : foreignKeys) {
+      fkIndex.put(fk.name(), new HashMap<>());
+    }
+    for (var entry : data.entrySet()) {
+      indexRow(entry.getKey(), entry.getValue());
+    }
+  }
+
+  /**
+   * The parent key a row references through a foreign key.
+   *
+   * @param fk a foreign key declared by this table
+   * @param row a stored row (offset 0 is the internal key)
+   * @return the parent key, or {@code null} if any referencing column is NULL
+   */
+  private String referencedKey(final ForeignKey fk, final List<String> row) {
+    List<String> parts = new ArrayList<>(fk.childColumns().size());
+    for (var col : fk.childColumns()) {
+      String value = row.get(columnLocationMap.get(col));
+      if (value == null) {
+        return null;
+      }
+      parts.add(value);
+    }
+    return joinKey(parts);
+  }
+
+  private void indexRow(final String pk, final List<String> row) {
+    for (var fk : foreignKeys) {
+      String parentKey = referencedKey(fk, row);
+      if (parentKey != null) {
+        fkIndex.get(fk.name()).computeIfAbsent(parentKey, k -> new LinkedHashSet<>()).add(pk);
+      }
+    }
+  }
+
+  private void unindexRow(final String pk, final List<String> row) {
+    for (var fk : foreignKeys) {
+      String parentKey = referencedKey(fk, row);
+      if (parentKey == null) {
+        continue;
+      }
+      Map<String, Set<String>> byParent = fkIndex.get(fk.name());
+      Set<String> children = byParent.get(parentKey);
+      if (children != null) {
+        children.remove(pk);
+        if (children.isEmpty()) {
+          byParent.remove(parentKey);
+        }
+      }
+    }
+  }
+
+  /**
+   * The parent key a row in schema order (without the internal key) would reference.
+   *
+   * @param fk a foreign key declared by this table
+   * @param values the row values in schema order
+   * @return the parent key, or {@code null} if any referencing column is NULL
+   */
+  String referencedKeyOfValues(final ForeignKey fk, final List<String> values) {
+    List<String> row = new ArrayList<>(values.size() + 1);
+    row.add(null);
+    row.addAll(values);
+    return referencedKey(fk, row);
+  }
+
+  /**
+   * The key a row in schema order (without the internal key) would be stored under.
+   *
+   * @param values the row values in schema order
+   * @return the internal key
+   */
+  String keyOfValues(final List<String> values) {
+    return getPk(values);
   }
 
   /**
@@ -224,7 +404,7 @@ public class Table implements Serializable {
       }
       parts.add(part);
     }
-    return String.join(PK_SEPARATOR, parts);
+    return joinKey(parts);
   }
 
   /**
@@ -241,30 +421,124 @@ public class Table implements Serializable {
     }
     String pk = getPk(r);
     if (data.containsKey(pk)) {
-      throw new RuntimeException(
-          "Duplicate primary key " + pk.replace(PK_SEPARATOR, ", ") + " in table " + name);
+      throw new RuntimeException("Duplicate primary key " + displayKey(pk) + " in table " + name);
     }
     List<String> row = new ArrayList<>(r.size() + 1);
     row.add(pk);
     row.addAll(r);
     data.put(pk, row);
+    indexRow(pk, row);
   }
 
   /**
-   * Check whether any row holds the given value in a column, used for foreign key checks.
+   * Whether a row with the given internal key exists.
    *
-   * @param columnName the column to search
-   * @param value the value to look for
-   * @return true if at least one row has that value
+   * @param key the internal key, see {@link #joinKey}
+   * @return true if the row exists
    */
-  public boolean containsValue(final String columnName, final String value) {
-    int index = columnLocationMap.get(getColumn(columnName).name());
-    for (var row : data.values()) {
-      if (value.equals(row.get(index))) {
-        return true;
+  public boolean containsKey(final String key) {
+    return data.containsKey(key);
+  }
+
+  /**
+   * The rows that reference a parent row through one of this table's foreign keys.
+   *
+   * @param fk a foreign key declared by this table
+   * @param parentKey internal key of the parent row
+   * @return keys of the referencing rows, in insertion order
+   */
+  public Set<String> rowsReferencing(final ForeignKey fk, final String parentKey) {
+    Set<String> children = fkIndex.get(fk.name()).get(parentKey);
+    return children == null ? Set.of() : new LinkedHashSet<>(children);
+  }
+
+  /**
+   * Find the rows where every given column equals the given value. Values are in stored form; a
+   * {@code null} value matches nothing, as in SQL.
+   *
+   * @param equalities column name to required value; empty matches every row
+   * @return keys of the matching rows, in insertion order
+   */
+  public List<String> findKeys(final Map<String, String> equalities) {
+    for (var col : equalities.keySet()) {
+      if (!hasColumn(col) || col.equals("primary_key")) {
+        throw new RuntimeException("Column " + col + " does not exist in table " + name);
       }
     }
-    return false;
+    if (equalities.containsValue(null)) {
+      return List.of();
+    }
+
+    // the whole primary key is given, so at most one row can match
+    List<String> pkColumns = getPrimaryKeyColumns();
+    if (equalities.keySet().containsAll(pkColumns)) {
+      List<String> parts = new ArrayList<>(pkColumns.size());
+      for (var col : pkColumns) {
+        parts.add(equalities.get(col));
+      }
+      List<String> row = data.get(joinKey(parts));
+      return row != null && matches(row, equalities) ? List.of(row.get(0)) : List.of();
+    }
+
+    List<String> keys = new ArrayList<>();
+    for (var row : data.values()) {
+      if (matches(row, equalities)) {
+        keys.add(row.get(0));
+      }
+    }
+    return keys;
+  }
+
+  private boolean matches(final List<String> row, final Map<String, String> equalities) {
+    for (var entry : equalities.entrySet()) {
+      if (!entry.getValue().equals(row.get(columnLocationMap.get(entry.getKey())))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Delete a row.
+   *
+   * @param pk internal key of the row
+   * @throws RuntimeException if the row does not exist
+   */
+  public void delete(final String pk) {
+    List<String> row = data.remove(pk);
+    if (row == null) {
+      throw new RuntimeException("No row " + displayKey(pk) + " in table " + name);
+    }
+    unindexRow(pk, row);
+  }
+
+  /**
+   * Change some non key columns of a row. Does not check foreign keys, the caller must.
+   *
+   * @param pk internal key of the row
+   * @param values column name to new stored value, {@code null} for SQL NULL
+   * @throws RuntimeException if the row does not exist, a column is part of the primary key, or a
+   *     NOT NULL column would become NULL
+   */
+  public void setValues(final String pk, final Map<String, String> values) {
+    List<String> row = data.get(pk);
+    if (row == null) {
+      throw new RuntimeException("No row " + displayKey(pk) + " in table " + name);
+    }
+    for (var entry : values.entrySet()) {
+      Column col = getColumn(entry.getKey());
+      if (col.primary()) {
+        throw new RuntimeException("Primary key column " + col.name() + " cannot be changed");
+      }
+      if (entry.getValue() == null && !col.nullable()) {
+        throw new RuntimeException("Column " + col.name() + " cannot be NULL");
+      }
+    }
+    unindexRow(pk, row);
+    for (var entry : values.entrySet()) {
+      row.set(columnLocationMap.get(entry.getKey()), entry.getValue());
+    }
+    indexRow(pk, row);
   }
 
   /**

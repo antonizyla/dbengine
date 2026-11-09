@@ -1,17 +1,34 @@
 package com.mycompany.app;
 
 import com.mycompany.app.Expr.Create;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Database Object. */
 public final class Database implements Serializable {
 
+  /** Pinned to the value before foreign keys were added, so older database files still load. */
+  private static final long serialVersionUID = -1438848577340601931L;
+
   private HashMap<String, Table> tables;
+
+  /**
+   * Foreign keys grouped by the table they reference. Derived from the tables' own constraints, so
+   * it is never stored; {@code null} means it must be rebuilt.
+   */
+  private transient Map<String, List<ForeignKey>> incoming;
+
   private String name;
   private String filepath;
 
@@ -82,6 +99,11 @@ public final class Database implements Serializable {
       } else if (statement instanceof Expr.Insert) {
         executeInsert((Expr.Insert) statement);
         System.out.println("1 row inserted into " + ((Expr.Insert) statement).table.lexeme + ".");
+      } else if (statement instanceof Expr.Delete) {
+        System.out.println(executeDelete((Expr.Delete) statement));
+      } else if (statement instanceof Expr.DropTable) {
+        executeDropTable((Expr.DropTable) statement);
+        System.out.println("Table " + ((Expr.DropTable) statement).table.lexeme + " dropped.");
       } else {
         throw new RuntimeException("Unsupported or unrecognised statement: " + query);
       }
@@ -114,40 +136,6 @@ public final class Database implements Serializable {
       System.out.println("Table does not already exist, proceeding with creation.");
     }
 
-    // check that foreign keys are valid
-    for (Column column : statement.columns) {
-      if (column.dependsOn() != null) {
-        String[] reference = column.dependsOn().split("\\.");
-        if (reference[0].equals(statement.tableName)) {
-          throw new RuntimeException(
-              "Foreign key `"
-                  + column.dependsOn()
-                  + "` cannot reference the same table "
-                  + statement.tableName);
-        }
-        Table foreignTable = getTable(reference[0]);
-        if (foreignTable == null) {
-          throw new RuntimeException(
-              "Foreign key `"
-                  + column.dependsOn()
-                  + "` references table "
-                  + reference[0]
-                  + " which does not exist");
-        }
-        if (!foreignTable.hasColumn(reference[1])) {
-          throw new RuntimeException(
-              "Foreign key `"
-                  + column.dependsOn()
-                  + "` does not exist in table "
-                  + foreignTable.getName());
-        }
-      }
-    }
-
-    if (debug) {
-      System.out.println("Foreign keys exist in other tables in database.");
-    }
-
     // check that there exists at least one primary key
     boolean hasPrimaryKey = false;
     for (Column column : statement.columns) {
@@ -161,9 +149,132 @@ public final class Database implements Serializable {
           "Table " + statement.tableName + " must have at least one primary key.");
     }
 
+    Set<String> columnNames = new HashSet<>();
+    for (Column column : statement.columns) {
+      if (!columnNames.add(column.name())) {
+        throw new RuntimeException(
+            "Column " + column.name() + " is defined more than once in " + statement.tableName);
+      }
+    }
+
+    // the table without constraints, used to check them; a table may reference itself
+    Table candidate = new Table(statement.tableName, statement.columns);
+    List<ForeignKey> foreignKeys = new ArrayList<>();
+    Set<String> constraintNames = new HashSet<>();
+    for (ForeignKey fk : statement.foreignKeys) {
+      foreignKeys.add(validateForeignKey(fk, candidate, constraintNames));
+    }
+
+    if (debug) {
+      System.out.println("Foreign keys reference primary keys of tables in the database.");
+    }
+
     // create the table
-    tables.put(statement.tableName, new Table(statement.tableName, statement.columns));
+    tables.put(statement.tableName, new Table(statement.tableName, statement.columns, foreignKeys));
+    incoming = null;
     dirty = true;
+  }
+
+  /**
+   * Check a parsed foreign key against the tables it joins and put it in its stored form: named,
+   * and with the parent columns in the order of the parent's primary key.
+   *
+   * @param fk the parsed constraint
+   * @param child the table being created
+   * @param usedNames constraint names already taken in the child table, updated
+   * @return the validated constraint
+   */
+  private ForeignKey validateForeignKey(ForeignKey fk, Table child, Set<String> usedNames) {
+    String reference = "Foreign key `" + fk.describeParent() + "`";
+    Table parent = fk.parentTable().equals(child.getName()) ? child : getTable(fk.parentTable());
+    if (parent == null) {
+      throw new RuntimeException(
+          reference + " references table " + fk.parentTable() + " which does not exist");
+    }
+    for (String column : fk.parentColumns()) {
+      if (!parent.hasColumn(column) || column.equals("primary_key")) {
+        throw new RuntimeException(reference + " does not exist in table " + parent.getName());
+      }
+    }
+    for (String column : fk.childColumns()) {
+      if (!child.hasColumn(column) || column.equals("primary_key")) {
+        throw new RuntimeException(
+            "Foreign key column " + column + " does not exist in table " + child.getName());
+      }
+    }
+    if (new HashSet<>(fk.childColumns()).size() != fk.childColumns().size()) {
+      throw new RuntimeException(reference + " lists a column of " + child.getName() + " twice");
+    }
+
+    // referencing the full primary key means a parent row is found directly by its key
+    List<String> parentKey = parent.getPrimaryKeyColumns();
+    if (fk.parentColumns().size() != parentKey.size()
+        || !new HashSet<>(fk.parentColumns()).equals(new HashSet<>(parentKey))) {
+      throw new RuntimeException(
+          reference
+              + " must reference the primary key of "
+              + parent.getName()
+              + " ("
+              + String.join(", ", parentKey)
+              + ")");
+    }
+    List<String> childColumns = new ArrayList<>(parentKey.size());
+    for (String parentColumn : parentKey) {
+      childColumns.add(fk.childColumns().get(fk.parentColumns().indexOf(parentColumn)));
+    }
+
+    for (int i = 0; i < parentKey.size(); i++) {
+      Column childColumn = child.getColumn(childColumns.get(i));
+      Column parentColumn = parent.getColumn(parentKey.get(i));
+      if (childColumn.type() != parentColumn.type()) {
+        throw new RuntimeException(
+            String.format(
+                "Foreign key column %s is a %s but %s.%s is a %s",
+                childColumn.name(),
+                typeName(childColumn.type()),
+                parent.getName(),
+                parentColumn.name(),
+                typeName(parentColumn.type())));
+      }
+      if (fk.onDelete() == ReferentialAction.SET_NULL && !childColumn.nullable()) {
+        throw new RuntimeException(
+            "ON DELETE SET NULL needs column " + childColumn.name() + " to allow NULL");
+      }
+      if (fk.onDelete() == ReferentialAction.SET_DEFAULT
+          && (childColumn.defaultValue() == null || childColumn.primary())) {
+        throw new RuntimeException(
+            "ON DELETE SET DEFAULT needs a DEFAULT on non key column " + childColumn.name());
+      }
+    }
+
+    String name = "fk_" + child.getName() + "_" + String.join("_", childColumns);
+    String unique = name;
+    for (int i = 2; !usedNames.add(unique); i++) {
+      unique = name + "_" + i;
+    }
+    return new ForeignKey(
+        unique, child.getName(), childColumns, parent.getName(), parentKey, fk.onDelete());
+  }
+
+  private static String typeName(TokenType type) {
+    return type == TokenType.STRING_TYPE ? "STRING" : String.valueOf(type);
+  }
+
+  /**
+   * Foreign keys grouped by the table they reference.
+   *
+   * @return parent table name to the constraints referencing it
+   */
+  private Map<String, List<ForeignKey>> incoming() {
+    if (incoming == null) {
+      incoming = new HashMap<>();
+      for (Table table : tables.values()) {
+        for (ForeignKey fk : table.getForeignKeys()) {
+          incoming.computeIfAbsent(fk.parentTable(), k -> new ArrayList<>()).add(fk);
+        }
+      }
+    }
+    return incoming;
   }
 
   private void executeSelect(Expr.Select select) {
@@ -257,33 +368,42 @@ public final class Database implements Serializable {
               targetColumns.size(), stmt.values.size()));
     }
 
-    // build the row in schema order, unspecified columns are NULL
+    // build the row in schema order, unspecified columns take their default or NULL
     List<String> row = new ArrayList<>();
     for (Column column : table.getColumns()) {
       int position = targetColumns.indexOf(column.name());
-      Object value = position < 0 ? null : ((Expr.Literal) stmt.values.get(position)).value;
+      String stored;
+      if (position < 0) {
+        stored = column.defaultValue();
+      } else {
+        Object value = ((Expr.Literal) stmt.values.get(position)).value;
+        stored = value == null ? null : column.toStoredValue(value);
+      }
 
-      if (value == null) {
-        if (!column.nullable()) {
-          throw new RuntimeException("Column " + column.name() + " cannot be NULL");
-        }
-        row.add(null);
+      if (stored == null && !column.nullable()) {
+        throw new RuntimeException("Column " + column.name() + " cannot be NULL");
+      }
+      row.add(stored);
+    }
+
+    // every foreign key must match an existing parent row, unless part of it is NULL
+    for (ForeignKey fk : table.getForeignKeys()) {
+      String parentKey = table.referencedKeyOfValues(fk, row);
+      if (parentKey == null) {
         continue;
       }
-
-      String stored = toStoredValue(column, value);
-
-      // a foreign key value must exist in the referenced table
-      if (column.dependsOn() != null) {
-        String[] reference = column.dependsOn().split("\\.");
-        Table foreignTable = getTable(reference[0]);
-        if (foreignTable == null || !foreignTable.containsValue(reference[1], stored)) {
-          throw new RuntimeException(
-              "Foreign key violation: " + stored + " does not exist in " + column.dependsOn());
-        }
+      // a row may reference itself
+      if (fk.parentTable().equals(table.getName()) && parentKey.equals(table.keyOfValues(row))) {
+        continue;
       }
-
-      row.add(stored);
+      Table parent = getTable(fk.parentTable());
+      if (parent == null || !parent.containsKey(parentKey)) {
+        throw new RuntimeException(
+            "Foreign key violation: "
+                + Table.displayKey(parentKey)
+                + " does not exist in "
+                + fk.describeParent());
+      }
     }
 
     // primary key presence and uniqueness are enforced by the table
@@ -291,30 +411,288 @@ public final class Database implements Serializable {
     dirty = true;
   }
 
+  /** A row of a table, identified by its internal key. */
+  private record RowRef(String table, String key) {}
+
+  /** A child row whose foreign key would stop a delete unless the child is deleted too. */
+  private record Blocker(ForeignKey fk, String childKey, String parentKey) {}
+
   /**
-   * Check a literal value against the column type and convert it into its stored form.
+   * Delete the rows matching the WHERE clause and apply the ON DELETE action of every foreign key
+   * that references them. Everything that would change is worked out first and only applied once
+   * every check has passed, so a failed delete leaves the database unchanged.
    *
-   * @param column the column the value is going into
-   * @param value the non-null literal value, either a {@link Double} or a {@link String}
-   * @return the value as stored in the table
+   * @param stmt the parsed delete statement
+   * @return a summary of what changed
+   * @throws RuntimeException if the table or a column does not exist, or a referenced row is
+   *     protected by NO ACTION or RESTRICT
    */
-  private static String toStoredValue(Column column, Object value) {
-    if (column.type() == TokenType.NUMBER) {
-      if (!(value instanceof Double)) {
+  private String executeDelete(Expr.Delete stmt) {
+    Table table = getTable(stmt.table.lexeme);
+    if (table == null) {
+      throw new RuntimeException("Table " + stmt.table.lexeme + " does not exist.");
+    }
+    Map<String, String> equalities = new LinkedHashMap<>();
+    if (!stmt.whereClause.isEmpty()) {
+      collectEqualities(table, stmt.whereClause.get(0), equalities);
+    }
+    List<String> matches = table.findKeys(equalities);
+
+    // follow the foreign keys from every deleted row, breadth first
+    Map<String, Set<String>> toDelete = new LinkedHashMap<>();
+    Map<String, Map<String, Map<String, String>>> toUpdate = new LinkedHashMap<>();
+    List<Blocker> blockers = new ArrayList<>();
+    Map<RowRef, List<ForeignKey>> setToDefault = new LinkedHashMap<>();
+    Deque<RowRef> queue = new ArrayDeque<>();
+    for (String key : matches) {
+      queue.add(new RowRef(table.getName(), key));
+    }
+
+    while (!queue.isEmpty()) {
+      RowRef row = queue.poll();
+      // also ends cycles, including rows that reference themselves
+      if (!toDelete.computeIfAbsent(row.table(), k -> new LinkedHashSet<>()).add(row.key())) {
+        continue;
+      }
+      for (ForeignKey fk : incoming().getOrDefault(row.table(), List.of())) {
+        Table child = getTable(fk.childTable());
+        for (String childKey : child.rowsReferencing(fk, row.key())) {
+          switch (fk.onDelete()) {
+            case CASCADE -> queue.add(new RowRef(child.getName(), childKey));
+            case SET_NULL, SET_DEFAULT -> {
+              Map<String, String> values =
+                  toUpdate
+                      .computeIfAbsent(child.getName(), k -> new LinkedHashMap<>())
+                      .computeIfAbsent(childKey, k -> new LinkedHashMap<>());
+              for (String column : fk.childColumns()) {
+                values.put(
+                    column,
+                    fk.onDelete() == ReferentialAction.SET_NULL
+                        ? null
+                        : child.getColumn(column).defaultValue());
+              }
+              if (fk.onDelete() == ReferentialAction.SET_DEFAULT) {
+                setToDefault
+                    .computeIfAbsent(new RowRef(child.getName(), childKey), k -> new ArrayList<>())
+                    .add(fk);
+              }
+            }
+            default -> blockers.add(new Blocker(fk, childKey, row.key()));
+          }
+        }
+      }
+    }
+
+    // a referencing row only blocks the delete if it is not being deleted as well
+    for (Blocker blocker : blockers) {
+      String childTable = blocker.fk().childTable();
+      if (!toDelete.getOrDefault(childTable, Set.of()).contains(blocker.childKey())) {
         throw new RuntimeException(
-            "Type mismatch: column " + column.name() + " expects a NUMBER but got '" + value + "'");
+            String.format(
+                "Cannot delete %s from %s: row %s of %s still references it through %s (ON DELETE"
+                    + " %s)",
+                Table.displayKey(blocker.parentKey()),
+                blocker.fk().parentTable(),
+                Table.displayKey(blocker.childKey()),
+                childTable,
+                blocker.fk().name(),
+                blocker.fk().onDelete()));
       }
-      double number = (Double) value;
-      if (number == Math.rint(number) && !Double.isInfinite(number)) {
-        return Long.toString((long) number);
+    }
+
+    // rows being deleted do not need their references changed first
+    for (var entry : toUpdate.entrySet()) {
+      Set<String> deleted = toDelete.getOrDefault(entry.getKey(), Set.of());
+      entry.getValue().keySet().removeIf(deleted::contains);
+    }
+
+    // a default must itself reference a row that will still exist
+    for (var entry : setToDefault.entrySet()) {
+      RowRef ref = entry.getKey();
+      if (toDelete.getOrDefault(ref.table(), Set.of()).contains(ref.key())) {
+        continue;
       }
-      return Double.toString(number);
+      Table child = getTable(ref.table());
+      for (ForeignKey fk : entry.getValue()) {
+        List<String> defaults = new ArrayList<>();
+        for (String column : fk.childColumns()) {
+          defaults.add(child.getColumn(column).defaultValue());
+        }
+        String parentKey = Table.joinKey(defaults);
+        boolean parentRemains =
+            getTable(fk.parentTable()).containsKey(parentKey)
+                && !toDelete.getOrDefault(fk.parentTable(), Set.of()).contains(parentKey);
+        boolean selfReference = fk.parentTable().equals(ref.table()) && parentKey.equals(ref.key());
+        if (!parentRemains && !selfReference) {
+          throw new RuntimeException(
+              String.format(
+                  "Cannot delete from %s: ON DELETE SET DEFAULT of %s needs %s to exist in %s",
+                  table.getName(), fk.name(), Table.displayKey(parentKey), fk.describeParent()));
+        }
+      }
     }
-    if (column.type() == TokenType.STRING_TYPE && !(value instanceof String)) {
-      throw new RuntimeException(
-          "Type mismatch: column " + column.name() + " expects a STRING but got " + value);
+
+    // every check has passed, apply the changes
+    int updated = 0;
+    for (var entry : toUpdate.entrySet()) {
+      Table child = getTable(entry.getKey());
+      for (var change : entry.getValue().entrySet()) {
+        child.setValues(change.getKey(), change.getValue());
+        updated++;
+      }
     }
-    return value.toString();
+    int deleted = 0;
+    for (var entry : toDelete.entrySet()) {
+      Table target = getTable(entry.getKey());
+      for (String key : entry.getValue()) {
+        target.delete(key);
+        deleted++;
+      }
+    }
+    if (deleted > 0 || updated > 0) {
+      dirty = true;
+    }
+
+    StringBuilder summary = new StringBuilder();
+    summary.append(plural(matches.size())).append(" deleted from ").append(table.getName());
+    if (deleted > matches.size()) {
+      summary.append(", ").append(plural(deleted - matches.size())).append(" cascaded");
+    }
+    if (updated > 0) {
+      summary.append(", ").append(plural(updated)).append(" updated by ON DELETE SET");
+    }
+    return summary.append('.').toString();
+  }
+
+  private static String plural(int rows) {
+    return rows + (rows == 1 ? " row" : " rows");
+  }
+
+  /**
+   * Turn a WHERE condition of the form {@code col = value [AND col = value ...]} into the stored
+   * values each column must equal. A column required to equal two different values gets {@code
+   * null}, which matches no row.
+   *
+   * @param table the table the condition is on
+   * @param condition the parsed condition
+   * @param result column name to stored value, filled in
+   */
+  private static void collectEqualities(Table table, Expr condition, Map<String, String> result) {
+    if (condition instanceof Expr.Grouping grouping) {
+      collectEqualities(table, grouping.expression, result);
+      return;
+    }
+    if (condition instanceof Expr.Logical logical && logical.operator.type == TokenType.AND) {
+      collectEqualities(table, logical.left, result);
+      collectEqualities(table, logical.right, result);
+      return;
+    }
+    if (condition instanceof Expr.Binary binary
+        && binary.operator.type == TokenType.EQUALS
+        && binary.left instanceof Expr.Literal left
+        && left.value instanceof String columnName) {
+      if (!table.hasColumn(columnName) || columnName.equals("primary_key")) {
+        throw new RuntimeException(
+            "Column " + columnName + " does not exist in table " + table.getName());
+      }
+      Object value = literalValue(binary.right);
+      if (value != null) {
+        String stored = table.getColumn(columnName).toStoredValue(value);
+        if (result.containsKey(columnName) && !stored.equals(result.get(columnName))) {
+          stored = null;
+        }
+        result.put(columnName, stored);
+        return;
+      }
+    }
+    throw new RuntimeException(
+        "DELETE only supports WHERE conditions of the form column = value joined by AND");
+  }
+
+  /**
+   * The value of a literal, allowing a leading minus on numbers.
+   *
+   * @param expr the expression
+   * @return a {@link Double} or {@link String}, or {@code null} if it is not a literal
+   */
+  private static Object literalValue(Expr expr) {
+    if (expr instanceof Expr.Literal literal) {
+      return literal.value;
+    }
+    if (expr instanceof Expr.Unary unary
+        && unary.operator.type == TokenType.MINUS
+        && unary.right instanceof Expr.Literal literal
+        && literal.value instanceof Double number) {
+      return -number;
+    }
+    return null;
+  }
+
+  /**
+   * Remove a table, refusing if another table still references it.
+   *
+   * @param stmt the parsed drop statement
+   */
+  private void executeDropTable(Expr.DropTable stmt) {
+    String name = stmt.table.lexeme;
+    if (getTable(name) == null) {
+      throw new RuntimeException("Table " + name + " does not exist.");
+    }
+    for (ForeignKey fk : incoming().getOrDefault(name, List.of())) {
+      if (!fk.childTable().equals(name)) {
+        throw new RuntimeException(
+            "Cannot drop table "
+                + name
+                + ": it is referenced by "
+                + fk.name()
+                + " in table "
+                + fk.childTable());
+      }
+    }
+    tables.remove(name);
+    incoming = null;
+    dirty = true;
+  }
+
+  /**
+   * Upgrade tables from files written before foreign keys were constraints. Their single column
+   * references become NO ACTION foreign keys where they point at a primary key.
+   */
+  private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    for (Table table : tables.values()) {
+      if (!table.needsForeignKeyMigration()) {
+        continue;
+      }
+      List<ForeignKey> foreignKeys = new ArrayList<>();
+      for (Column column : table.getColumns()) {
+        if (column.dependsOn() == null) {
+          continue;
+        }
+        String[] reference = column.dependsOn().split("\\.");
+        Table parent = tables.get(reference[0]);
+        if (parent == null || !parent.getPrimaryKeyColumns().equals(List.of(reference[1]))) {
+          System.err.println(
+              "[Database] Dropping foreign key "
+                  + table.getName()
+                  + "."
+                  + column.name()
+                  + ": "
+                  + column.dependsOn()
+                  + " is not a primary key");
+          continue;
+        }
+        foreignKeys.add(
+            new ForeignKey(
+                "fk_" + table.getName() + "_" + column.name(),
+                table.getName(),
+                List.of(column.name()),
+                parent.getName(),
+                List.of(reference[1]),
+                ReferentialAction.NO_ACTION));
+      }
+      table.setForeignKeys(foreignKeys);
+    }
   }
 
   /**

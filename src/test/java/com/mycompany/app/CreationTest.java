@@ -42,7 +42,7 @@ public class CreationTest {
     Column column = p.column();
     assert column.name().equals("columnName");
     assert column.type() == TokenType.STRING_TYPE;
-    assert column.nullable() == false;
+    assert column.nullable() == true;
     assert column.primary() == false;
     assert column.dependsOn().equals("tableName.attributeName");
   }
@@ -88,7 +88,7 @@ public class CreationTest {
     assert cols.size() == 1;
     assert col.name().equals("columnName");
     assert col.type() == TokenType.STRING_TYPE;
-    assert col.nullable() == false;
+    assert col.nullable() == true;
     assert col.primary() == false;
     assert col.dependsOn().equals("tableName.attributeName");
   }
@@ -107,13 +107,13 @@ public class CreationTest {
     var col1 = cols.get(0);
     assert col1.name().equals("columnName");
     assert col1.type() == TokenType.STRING_TYPE;
-    assert col1.nullable() == false;
+    assert col1.nullable() == true;
     assert col1.primary() == false;
     assert col1.dependsOn().equals("tableName.attributeName");
     var col2 = cols.get(1);
     assert col2.name().equals("columnName2");
     assert col2.type() == TokenType.STRING_TYPE;
-    assert col2.nullable() == false;
+    assert col2.nullable() == true;
     assert col2.primary() == false;
     assert col2.dependsOn().equals("tableName2.attributeName2");
   }

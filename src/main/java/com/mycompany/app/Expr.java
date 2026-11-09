@@ -40,15 +40,60 @@ abstract class Expr {
   static class Create extends Expr {
     final String tableName;
     final List<Column> columns;
+    // every foreign key of the table, column level ones included, not yet validated
+    final List<ForeignKey> foreignKeys;
 
     Create(String tableName, List<Column> cols) {
+      this(tableName, cols, List.of());
+    }
+
+    Create(String tableName, List<Column> cols, List<ForeignKey> foreignKeys) {
       this.tableName = tableName;
       this.columns = cols;
+      this.foreignKeys = foreignKeys;
     }
 
     @Override
     public String toString() {
-      return "Create{" + "tableName='" + tableName + '\'' + ", columns=" + columns + '}';
+      return "Create{"
+          + "tableName='"
+          + tableName
+          + '\''
+          + ", columns="
+          + columns
+          + ", foreignKeys="
+          + foreignKeys
+          + '}';
+    }
+  }
+
+  // DELETE FROM table [WHERE condition]
+  static class Delete extends Expr {
+    final Token table;
+    final List<Expr> whereClause;
+
+    Delete(Token table, List<Expr> whereClause) {
+      this.table = table;
+      this.whereClause = whereClause;
+    }
+
+    @Override
+    public String toString() {
+      return "Delete{table=" + table.lexeme + ", where=" + whereClause + "}";
+    }
+  }
+
+  // DROP TABLE table
+  static class DropTable extends Expr {
+    final Token table;
+
+    DropTable(Token table) {
+      this.table = table;
+    }
+
+    @Override
+    public String toString() {
+      return "DropTable{table=" + table.lexeme + "}";
     }
   }
 
